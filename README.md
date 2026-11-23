@@ -1,19 +1,21 @@
 # LEGENDS ARENA
 
-**LEGENDS ARENA — Eternal Rift** adalah prototipe game MOBA 3D berbasis browser. Proyek ini saat ini dikemas sebagai aplikasi HTML mandiri yang memakai Three.js untuk rendering 3D dan beberapa library melalui CDN.
+**LEGENDS ARENA — Eternal Rift** adalah prototipe game MOBA 3D berbasis browser. Frontend statis memakai Three.js; fitur party online menggunakan Socket.IO dan komunikasi suara/video antarpemain memakai WebRTC.
 
 ## Status proyek
 
-Versi yang diunggah adalah **prototype playable lokal / single-player simulation**, bukan server multiplayer 5v5 online. Fitur seperti akun, matchmaking, server authoritative, sinkronisasi real-time antarpemain, penyimpanan progres, dan leaderboard online belum diimplementasikan.
+Versi saat ini memiliki **online party MVP**: room privat maksimal lima pemain, kode undangan, sinkronisasi posisi/rotasi avatar, dan signaling WebRTC untuk voice/video. Pertarungan, HP, skill, minion, turret, dan hasil pertandingan masih disimulasikan secara lokal di setiap browser; ini belum merupakan MOBA 5v5 dengan simulasi combat authoritative.
 
 ## Fitur prototype
 
 - Arena 3D bertema fantasi dengan kamera follow dan overview.
 - Hero pemain Kael dengan HUD, level, HP, mana, XP, gold, dan KDA.
 - Kontrol keyboard dan mouse untuk pergerakan serta pertarungan.
-- Skill, basic attack, efek visual, projectile, dan audio sintetis.
+- Skill, basic attack, efek visual, projectile, dan audio sintetis dengan pengaturan volume tersimpan.
 - Minimap, lane, turret, minion, objective, shop, dan layar hasil pertandingan.
 - Layout responsif untuk browser desktop dan perangkat mobile (kontrol dapat berbeda sesuai perangkat).
+- Online party: buat/gabung room dengan kode, daftar pemain, dan sinkronisasi posisi avatar.
+- Voice chat dan video chat WebRTC dengan izin mikrofon/kamera dari browser.
 
 ## Menjalankan game
 
@@ -59,14 +61,15 @@ LEGENDS-ARENA/
 
 Koneksi internet diperlukan ketika pertama kali memuat library dan font dari CDN.
 
-## Catatan pengembangan berikutnya
+## Batasan dan pekerjaan lanjutan
 
-Untuk mengembangkan game menjadi MOBA online sesungguhnya, arsitektur lanjutan perlu mencakup:
-1. Client modular berbasis TypeScript (misalnya Three.js + Vite).
-2. Server game authoritative (misalnya Node.js + Colyseus).
-3. Validasi aksi, simulasi pertandingan, dan sinkronisasi state di server.
-4. Sistem akun dan penyimpanan progres dengan backend aman.
-5. Matchmaking, reconnect, anti-cheat, telemetry, dan pengujian beban.
+- Server room saat ini menyinkronkan kehadiran pemain dan posisi avatar, bukan state combat.
+- Serangan, damage, HP, skill, minion, turret, boss, dan kemenangan belum disinkronkan secara authoritative.
+- Room disimpan di memori server dan akan hilang saat server restart.
+- Voice/video menggunakan koneksi peer-to-peer WebRTC; kualitas koneksi bergantung pada jaringan/NAT. Untuk jaringan yang ketat, produksi memerlukan TURN server.
+- Belum ada akun, matchmaking otomatis, persistence, reconnect penuh, anti-cheat, atau leaderboard online.
+
+Tahap berikutnya adalah memindahkan seluruh simulasi pertandingan ke server authoritative, menambahkan reconnect, TURN, autentikasi, dan pengujian beban.
 
 Dokumentasi status saat ini tersedia di [docs/PROJECT-STATUS.md](docs/PROJECT-STATUS.md).
 
