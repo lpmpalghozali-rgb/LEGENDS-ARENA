@@ -202,8 +202,11 @@
                         <i class="fa-solid fa-video text-xs"></i>
                     </button>
 
-                    <!-- Audio Toggle -->
-                    <button id="btn-audio" onclick="toggleAudio()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-xl p-2 text-sky-400 shadow-lg transition" title="Suara">
+                    <!-- Audio Settings + Quick Mute -->
+                    <button onclick="openAudioSettings()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-xl p-2 text-amber-300 shadow-lg transition" title="Pengaturan Suara" aria-label="Pengaturan Suara">
+                        <i class="fa-solid fa-sliders text-xs"></i>
+                    </button>
+                    <button id="btn-audio" onclick="toggleAudio()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-xl p-2 text-sky-400 shadow-lg transition" title="Mute / Unmute">
                         <i class="fa-solid fa-volume-high text-xs"></i>
                     </button>
                 </div>
@@ -316,6 +319,70 @@
             </div>
         </div>
 
+        <!-- Audio Settings Modal -->
+        <div id="audio-settings-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 interactive" role="dialog" aria-modal="true" aria-labelledby="audio-settings-title">
+            <div class="bg-slate-900 border border-sky-500/40 rounded-2xl w-full max-w-md p-5 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-3 mb-5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">
+                            <i class="fa-solid fa-sliders text-sky-300"></i>
+                        </div>
+                        <div>
+                            <h3 id="audio-settings-title" class="font-cinzel font-bold text-lg text-white">AUDIO SETTINGS</h3>
+                            <p class="text-[10px] text-slate-400">Atur pengalaman audio permainan</p>
+                        </div>
+                    </div>
+                    <button onclick="closeAudioSettings()" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-rose-600 text-white transition" aria-label="Tutup pengaturan suara">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between bg-slate-800/70 rounded-xl p-3 mb-5">
+                    <div>
+                        <div class="text-sm font-bold text-white">Audio Game</div>
+                        <div id="audio-status-text" class="text-[11px] text-slate-400">Suara aktif</div>
+                    </div>
+                    <button id="audio-mute-switch" onclick="toggleAudio()" class="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold transition">
+                        <i class="fa-solid fa-volume-high mr-1"></i> AKTIF
+                    </button>
+                </div>
+
+                <div class="space-y-5">
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="audio-master-volume" class="text-xs font-bold text-slate-200"><i class="fa-solid fa-volume-high text-sky-400 mr-2"></i>Volume Utama</label>
+                            <span id="audio-master-value" class="text-xs font-extrabold text-sky-300">80%</span>
+                        </div>
+                        <input id="audio-master-volume" type="range" min="0" max="100" value="80" step="1" oninput="updateAudioSetting('master', this.value)" class="w-full accent-sky-500 cursor-pointer">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="audio-music-volume" class="text-xs font-bold text-slate-200"><i class="fa-solid fa-music text-amber-400 mr-2"></i>Musik Latar</label>
+                            <span id="audio-music-value" class="text-xs font-extrabold text-amber-300">35%</span>
+                        </div>
+                        <input id="audio-music-volume" type="range" min="0" max="100" value="35" step="1" oninput="updateAudioSetting('music', this.value)" class="w-full accent-amber-500 cursor-pointer">
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="audio-sfx-volume" class="text-xs font-bold text-slate-200"><i class="fa-solid fa-bolt text-emerald-400 mr-2"></i>Efek Suara (SFX)</label>
+                            <span id="audio-sfx-value" class="text-xs font-extrabold text-emerald-300">90%</span>
+                        </div>
+                        <input id="audio-sfx-volume" type="range" min="0" max="100" value="90" step="1" oninput="updateAudioSetting('sfx', this.value)" class="w-full accent-emerald-500 cursor-pointer">
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mt-6 pt-4 border-t border-slate-800">
+                    <button onclick="resetAudioSettings()" class="flex-1 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> RESET
+                    </button>
+                    <button onclick="saveAudioSettings()" class="flex-1 py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold transition">
+                        <i class="fa-solid fa-check mr-1"></i> SIMPAN
+                    </button>
+                </div>
+                <p id="audio-save-feedback" class="text-center text-[10px] text-emerald-400 mt-3 h-3"></p>
+            </div>
+        </div>
+
         <!-- Respawn Overlay -->
         <div id="respawn-overlay" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center pointer-events-none">
             <div class="bg-slate-900/95 border border-rose-500/60 rounded-2xl px-8 py-5 text-center shadow-2xl">
@@ -402,28 +469,147 @@
         // ==========================================
         // 1. AUDIO ENGINE (TONE.JS SYNTH)
         // ==========================================
+        const DEFAULT_AUDIO_SETTINGS = { master: 80, music: 35, sfx: 90, muted: false };
+        let audioSettings = { ...DEFAULT_AUDIO_SETTINGS };
         let audioEnabled = true;
-        let synth, polySynth;
+        let synth, polySynth, musicSynth, masterGain, sfxGain, musicGain, musicLoop;
+
+        function loadAudioSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('legendsArenaAudioSettings') || 'null');
+                if (saved && typeof saved === 'object') {
+                    audioSettings = {
+                        master: Math.max(0, Math.min(100, Number(saved.master ?? DEFAULT_AUDIO_SETTINGS.master))),
+                        music: Math.max(0, Math.min(100, Number(saved.music ?? DEFAULT_AUDIO_SETTINGS.music))),
+                        sfx: Math.max(0, Math.min(100, Number(saved.sfx ?? DEFAULT_AUDIO_SETTINGS.sfx))),
+                        muted: Boolean(saved.muted)
+                    };
+                }
+            } catch (e) {
+                console.warn('Pengaturan audio tidak dapat dibaca:', e);
+            }
+            audioEnabled = !audioSettings.muted;
+            syncAudioSettingsUI();
+        }
+
+        function syncAudioSettingsUI() {
+            const fields = [
+                ['master', 'audio-master-volume', 'audio-master-value'],
+                ['music', 'audio-music-volume', 'audio-music-value'],
+                ['sfx', 'audio-sfx-volume', 'audio-sfx-value']
+            ];
+            fields.forEach(([key, inputId, valueId]) => {
+                const input = document.getElementById(inputId);
+                const value = document.getElementById(valueId);
+                if (input) input.value = audioSettings[key];
+                if (value) value.textContent = audioSettings[key] + '%';
+            });
+
+            const status = document.getElementById('audio-status-text');
+            const muteButton = document.getElementById('audio-mute-switch');
+            const quickButton = document.getElementById('btn-audio');
+            if (status) status.textContent = audioEnabled ? 'Suara aktif' : 'Semua suara dimatikan';
+            if (muteButton) {
+                muteButton.innerHTML = audioEnabled
+                    ? '<i class="fa-solid fa-volume-high mr-1"></i> AKTIF'
+                    : '<i class="fa-solid fa-volume-xmark mr-1"></i> MUTE';
+                muteButton.className = audioEnabled
+                    ? 'px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold transition'
+                    : 'px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-extrabold transition';
+            }
+            if (quickButton) {
+                quickButton.innerHTML = audioEnabled
+                    ? '<i class="fa-solid fa-volume-high text-xs"></i>'
+                    : '<i class="fa-solid fa-volume-xmark text-xs text-rose-400"></i>';
+                quickButton.title = audioEnabled ? 'Matikan Suara' : 'Aktifkan Suara';
+            }
+        }
+
+        function applyAudioSettings() {
+            if (!masterGain || !sfxGain || !musicGain) return;
+            masterGain.gain.rampTo(audioEnabled ? audioSettings.master / 100 : 0, 0.08);
+            sfxGain.gain.rampTo(audioSettings.sfx / 100, 0.08);
+            musicGain.gain.rampTo(audioSettings.music / 100, 0.08);
+        }
 
         function initAudio() {
             if (typeof Tone === 'undefined') return;
             try {
+                if (!masterGain) {
+                    masterGain = new Tone.Gain(1).toDestination();
+                    sfxGain = new Tone.Gain(1).connect(masterGain);
+                    musicGain = new Tone.Gain(1).connect(masterGain);
+
+                    synth = new Tone.MembraneSynth().connect(sfxGain);
+                    polySynth = new Tone.PolySynth(Tone.Synth).connect(sfxGain);
+                    polySynth.volume.value = -10;
+                    synth.volume.value = -8;
+
+                    musicSynth = new Tone.PolySynth(Tone.Synth).connect(musicGain);
+                    musicSynth.set({ oscillator: { type: 'sine' }, envelope: { attack: 1.2, decay: 1, sustain: 0.35, release: 2.5 } });
+                    musicSynth.volume.value = -22;
+                    const ambientNotes = [['C3', 'G3', 'C4'], ['A2', 'E3', 'A3'], ['F2', 'C3', 'F3'], ['G2', 'D3', 'G3']];
+                    let ambientIndex = 0;
+                    musicLoop = new Tone.Loop((time) => {
+                        if (!audioEnabled || audioSettings.music <= 0 || !musicSynth) return;
+                        musicSynth.triggerAttackRelease(ambientNotes[ambientIndex % ambientNotes.length], '1m', time);
+                        ambientIndex++;
+                    }, '1m');
+                    musicLoop.start(0);
+                }
                 Tone.start();
-                synth = new Tone.MembraneSynth().toDestination();
-                polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
-                polySynth.volume.value = -10;
-                synth.volume.value = -8;
+                applyAudioSettings();
+                if (Tone.Transport.state !== 'started') Tone.Transport.start();
             } catch (e) {
-                console.warn("Audio init skipped:", e);
+                console.warn('Audio init skipped:', e);
             }
         }
 
         function toggleAudio() {
             audioEnabled = !audioEnabled;
-            const btn = document.getElementById('btn-audio');
-            btn.innerHTML = audioEnabled
-                ? '<i class="fa-solid fa-volume-high text-xs"></i>'
-                : '<i class="fa-solid fa-volume-xmark text-xs text-rose-400"></i>';
+            audioSettings.muted = !audioEnabled;
+            applyAudioSettings();
+            syncAudioSettingsUI();
+            saveAudioSettings(true);
+        }
+
+        function openAudioSettings() {
+            document.getElementById('audio-settings-modal').classList.remove('hidden');
+            syncAudioSettingsUI();
+        }
+
+        function closeAudioSettings() {
+            document.getElementById('audio-settings-modal').classList.add('hidden');
+        }
+
+        function updateAudioSetting(key, value) {
+            audioSettings[key] = Math.max(0, Math.min(100, Number(value) || 0));
+            const valueEl = document.getElementById('audio-' + key + '-value');
+            if (valueEl) valueEl.textContent = audioSettings[key] + '%';
+            applyAudioSettings();
+        }
+
+        function saveAudioSettings(silent = false) {
+            audioSettings.muted = !audioEnabled;
+            try {
+                localStorage.setItem('legendsArenaAudioSettings', JSON.stringify(audioSettings));
+                const feedback = document.getElementById('audio-save-feedback');
+                if (feedback && !silent) {
+                    feedback.textContent = 'Pengaturan berhasil disimpan!';
+                    setTimeout(() => { feedback.textContent = ''; }, 2200);
+                }
+            } catch (e) {
+                console.warn('Pengaturan audio tidak dapat disimpan:', e);
+            }
+            syncAudioSettingsUI();
+        }
+
+        function resetAudioSettings() {
+            audioSettings = { ...DEFAULT_AUDIO_SETTINGS };
+            audioEnabled = true;
+            syncAudioSettingsUI();
+            applyAudioSettings();
+            saveAudioSettings();
         }
 
         function playSound(type) {
@@ -431,18 +617,20 @@
             try {
                 const now = Tone.now();
                 if (type === 'attack') {
-                    synth.triggerAttackRelease("C2", "16n", now);
+                    synth.triggerAttackRelease('C2', '16n', now);
                 } else if (type === 'skill') {
-                    polySynth.triggerAttackRelease(["E4", "B4"], "8n", now);
+                    polySynth.triggerAttackRelease(['E4', 'B4'], '8n', now);
                 } else if (type === 'ult') {
-                    polySynth.triggerAttackRelease(["C3", "G3", "C4", "E4"], "4n", now);
+                    polySynth.triggerAttackRelease(['C3', 'G3', 'C4', 'E4'], '4n', now);
                 } else if (type === 'kill') {
-                    polySynth.triggerAttackRelease(["G4", "B4", "D5"], "8n", now);
+                    polySynth.triggerAttackRelease(['G4', 'B4', 'D5'], '8n', now);
                 } else if (type === 'buy') {
-                    polySynth.triggerAttackRelease(["A4", "E5"], "16n", now);
+                    polySynth.triggerAttackRelease(['A4', 'E5'], '16n', now);
                 }
             } catch (e) {}
         }
+
+        loadAudioSettings();
 
         // ==========================================
         // 2. GAME STATE & CONFIGURATION
