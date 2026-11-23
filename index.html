@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Tone.js untuk efek suara sintetis tanpa aset eksternal -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Socket.IO client for online rooms and WebRTC signaling -->
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
     <!-- Font Awesome untuk Ikon Skill & UI -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -216,6 +218,17 @@
                     <div id="announcer-text" class="text-xs font-bold text-sky-200">Minion telah dikerahkan!</div>
                 </div>
             </div>
+        </div>
+
+        <!-- Online party voice/video controls -->
+        <div id="online-comms-bar" class="hidden absolute top-20 right-3 z-30 interactive flex flex-col items-end gap-2">
+            <div class="flex gap-2">
+                <button id="game-mic-btn" onclick="toggleMicrophone()" class="rounded-lg border border-slate-600 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-200 shadow-lg"><i class="fa-solid fa-microphone mr-1"></i> MIC</button>
+                <button id="game-cam-btn" onclick="toggleCamera()" class="rounded-lg border border-slate-600 bg-slate-900/90 px-3 py-2 text-xs font-bold text-slate-200 shadow-lg"><i class="fa-solid fa-video mr-1"></i> CAM</button>
+                <button onclick="leaveOnlineRoom()" class="rounded-lg border border-rose-700/70 bg-rose-950/90 px-3 py-2 text-xs font-bold text-rose-200 shadow-lg" title="Keluar room"><i class="fa-solid fa-phone-slash"></i></button>
+            </div>
+            <div id="online-video-grid" class="grid grid-cols-2 gap-2 max-w-xs"></div>
+            <div id="online-player-list" class="rounded-lg border border-slate-700 bg-slate-950/85 px-3 py-2 text-[10px] text-slate-200 shadow-lg"></div>
         </div>
 
         <!-- Passive Status Indicator -->
@@ -431,9 +444,36 @@
                 </div>
             </div>
 
-            <button onclick="startGame()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-base tracking-wider shadow-[0_0_25px_rgba(14,165,233,0.5)] transition transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3">
-                <i class="fa-solid fa-play"></i>
-                MASUK KE ETERNAL RIFT (5v5)
+            <div class="bg-slate-950/70 border border-emerald-500/30 rounded-2xl p-4 mb-4 text-left">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <div>
+                        <div class="text-sm font-extrabold text-white"><i class="fa-solid fa-globe text-emerald-400 mr-2"></i>ONLINE PARTY</div>
+                        <p class="text-[10px] text-slate-400 mt-0.5">Buat room atau masukkan kode teman (maks. 5 pemain)</p>
+                    </div>
+                    <span id="online-status-pill" class="text-[9px] font-bold px-2 py-1 rounded-full bg-slate-800 text-slate-400">OFFLINE</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                    <input id="online-player-name" maxlength="18" value="Player" placeholder="Nama pemain" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-sky-500">
+                    <input id="online-room-code" maxlength="6" placeholder="KODE ROOM" class="w-full uppercase tracking-[0.25em] text-center bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-sky-500">
+                </div>
+                <input id="online-server-url" type="url" placeholder="URL server multiplayer (https://...)" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-[11px] text-white outline-none focus:border-sky-500 mb-2">
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="createOnlineRoom()" class="py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold transition"><i class="fa-solid fa-plus mr-1"></i> BUAT ROOM</button>
+                    <button onclick="joinOnlineRoom()" class="py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold transition"><i class="fa-solid fa-right-to-bracket mr-1"></i> GABUNG</button>
+                </div>
+                <div id="online-lobby-status" class="text-[10px] text-slate-400 mt-2 min-h-4">Server multiplayer perlu di-deploy satu kali sebelum bermain online.</div>
+                <div id="online-room-share" class="hidden mt-2 rounded-lg bg-slate-900 border border-emerald-500/30 p-2 flex items-center justify-between gap-2">
+                    <span class="text-[10px] text-slate-300">Kode undangan: <b id="online-room-code-label" class="text-emerald-300 tracking-widest"></b></span>
+                    <button onclick="copyOnlineRoomCode()" class="text-[10px] font-bold text-sky-300"><i class="fa-regular fa-copy mr-1"></i>SALIN</button>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="toggleMicrophone()" id="lobby-mic-btn" class="flex-1 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"><i class="fa-solid fa-microphone mr-1"></i> MIC</button>
+                    <button onclick="toggleCamera()" id="lobby-cam-btn" class="flex-1 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold"><i class="fa-solid fa-video mr-1"></i> KAMERA</button>
+                </div>
+            </div>
+            <button onclick="startGame()" class="w-full py-3 rounded-2xl bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 text-white font-extrabold text-sm tracking-wider shadow-lg transition flex items-center justify-center gap-3">
+                <i class="fa-solid fa-gamepad"></i>
+                MAIN SOLO DENGAN BOT
             </button>
         </div>
     </div>
@@ -631,6 +671,317 @@
         }
 
         loadAudioSettings();
+
+        // ==========================================
+        // ONLINE PARTY, PLAYER SYNC & WEBRTC VOICE/VIDEO
+        // ==========================================
+        let onlineSocket = null;
+        let onlineRoomId = null;
+        let onlineSelfId = null;
+        let onlineSlot = 0;
+        let onlinePlayers = new Map();
+        let remoteAvatars = new Map();
+        let peerConnections = new Map();
+        let localMediaStream = new MediaStream();
+        let microphoneEnabled = false;
+        let cameraEnabled = false;
+        let lastNetworkSync = 0;
+
+        function onlineStatus(message, isError = false) {
+            const el = document.getElementById('online-lobby-status');
+            if (el) { el.textContent = message; el.className = 'text-[10px] mt-2 min-h-4 ' + (isError ? 'text-rose-400' : 'text-slate-400'); }
+            const pill = document.getElementById('online-status-pill');
+            if (pill) {
+                pill.textContent = onlineRoomId ? 'ONLINE' : (onlineSocket?.connected ? 'TERHUBUNG' : 'OFFLINE');
+                pill.className = 'text-[9px] font-bold px-2 py-1 rounded-full ' + (onlineRoomId ? 'bg-emerald-500/15 text-emerald-300' : 'bg-slate-800 text-slate-400');
+            }
+        }
+
+        function getOnlineServerUrl() {
+            const field = document.getElementById('online-server-url');
+            const saved = localStorage.getItem('legendsArenaRealtimeUrl') || '';
+            const url = (field?.value || saved || window.LEGENDS_ARENA_SERVER_URL || '').trim().replace(/\/$/, '');
+            if (field && url) field.value = url;
+            return url;
+        }
+
+        function ensureOnlineSocket(done) {
+            const url = getOnlineServerUrl();
+            if (!url) { onlineStatus('Masukkan URL server multiplayer terlebih dahulu.', true); return; }
+            if (typeof io === 'undefined') { onlineStatus('Socket.IO client gagal dimuat. Periksa koneksi internet.', true); return; }
+            localStorage.setItem('legendsArenaRealtimeUrl', url);
+            if (onlineSocket?.connected) { done(); return; }
+            if (onlineSocket) onlineSocket.disconnect();
+            onlineSocket = io(url, { transports: ['websocket', 'polling'], reconnection: true, timeout: 12000 });
+            onlineStatus('Menghubungkan ke server multiplayer...');
+            onlineSocket.once('connect', done);
+            onlineSocket.on('connect_error', (err) => onlineStatus('Gagal terhubung: ' + (err.message || 'server tidak tersedia'), true));
+            onlineSocket.on('disconnect', () => {
+                onlineRoomId = null;
+                onlineStatus('Koneksi terputus. Coba buat atau gabung room kembali.', true);
+            });
+            onlineSocket.on('player-joined', (player) => {
+                onlinePlayers.set(player.id, player);
+                renderOnlinePlayerList();
+                if (gameState.started) addRemoteAvatar(player);
+                createPeerConnection(player.id, true);
+            });
+            onlineSocket.on('player-left', ({ id }) => {
+                onlinePlayers.delete(id);
+                removeRemoteAvatar(id);
+                closePeerConnection(id);
+                renderOnlinePlayerList();
+            });
+            onlineSocket.on('room-state', (snapshot) => {
+                (snapshot.players || []).forEach((p) => {
+                    onlinePlayers.set(p.id, p);
+                    if (p.id !== onlineSelfId && gameState.started) addRemoteAvatar(p);
+                });
+                renderOnlinePlayerList();
+            });
+            onlineSocket.on('player:moved', (player) => {
+                onlinePlayers.set(player.id, player);
+                updateRemoteAvatarTarget(player);
+            });
+            onlineSocket.on('rtc:signal', async ({ from, signal }) => {
+                try {
+                    const pc = createPeerConnection(from, false);
+                    if (signal.description) {
+                        await pc.setRemoteDescription(new RTCSessionDescription(signal.description));
+                        if (signal.description.type === 'offer') {
+                            const answer = await pc.createAnswer();
+                            await pc.setLocalDescription(answer);
+                            onlineSocket.emit('rtc:signal', { to: from, signal: { description: pc.localDescription } });
+                        }
+                    } else if (signal.candidate) {
+                        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                    }
+                } catch (err) { console.warn('WebRTC signaling:', err); }
+            });
+        }
+
+        function performRoomAction(action) {
+            const name = document.getElementById('online-player-name')?.value || 'Player';
+            const code = document.getElementById('online-room-code')?.value || '';
+            ensureOnlineSocket(() => {
+                const event = action === 'create' ? 'room:create' : 'room:join';
+                onlineStatus(action === 'create' ? 'Membuat room...' : 'Bergabung ke room...');
+                onlineSocket.emit(event, { name, code }, (result) => {
+                    if (!result?.ok) { onlineStatus(result?.error || 'Tidak dapat masuk room.', true); return; }
+                    onlineRoomId = result.code;
+                    onlineSelfId = result.selfId;
+                    onlineSlot = (result.players || []).findIndex(p => p.id === onlineSelfId);
+                    onlinePlayers = new Map((result.players || []).map(p => [p.id, p]));
+                    document.getElementById('online-room-code').value = result.code;
+                    document.getElementById('online-room-code-label').textContent = result.code;
+                    document.getElementById('online-room-share').classList.remove('hidden');
+                    onlineStatus('Room ' + result.code + ' siap. Pemain: ' + result.players.length + '/5');
+                    (result.players || []).forEach(p => { if (p.id !== onlineSelfId) createPeerConnection(p.id, false); });
+                    renderOnlinePlayerList();
+                    startGame();
+                    document.getElementById('online-comms-bar')?.classList.remove('hidden');
+                });
+            });
+        }
+        function createOnlineRoom() { performRoomAction('create'); }
+        function joinOnlineRoom() { performRoomAction('join'); }
+        function copyOnlineRoomCode() {
+            if (!onlineRoomId) return;
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(onlineRoomId).then(() => onlineStatus('Kode room berhasil disalin.'));
+            else { document.getElementById('online-room-code').select(); document.execCommand('copy'); onlineStatus('Kode room disalin.'); }
+        }
+        function renderOnlinePlayerList() {
+            const el = document.getElementById('online-player-list');
+            if (!el) return;
+            const rows = [...onlinePlayers.values()].map(p => (p.id === onlineSelfId ? '• ' : '') + p.name);
+            el.textContent = 'PARTY ' + rows.length + '/5 — ' + rows.join('  |  ');
+        }
+
+        function createRemoteAvatar(player) {
+            if (!scene || remoteAvatars.has(player.id)) return;
+            const group = new THREE.Group();
+            const armor = new THREE.MeshStandardMaterial({ color: 0x22c55e, metalness: 0.55, roughness: 0.35 });
+            const dark = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.35, roughness: 0.6 });
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.05, 2.1, 10), armor);
+            body.position.y = 1.25;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.62, 12, 10), dark);
+            head.position.y = 2.75;
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.45, 1.05), new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.65, roughness: 0.3 }));
+            shield.position.set(0.95, 1.45, 0.25);
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.08, 6, 20), new THREE.MeshBasicMaterial({ color: 0x34d399 }));
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.12;
+            group.add(body, head, shield, ring);
+            group.position.set(Number(player.x) || 0, 0, Number(player.z) || 0);
+            scene.add(group);
+            remoteAvatars.set(player.id, { group, targetX: group.position.x, targetZ: group.position.z, rotation: Number(player.rotation) || 0 });
+        }
+        function addRemoteAvatar(player) {
+            createRemoteAvatar(player);
+            updateRemoteAvatarTarget(player);
+        }
+        function updateRemoteAvatarTarget(player) {
+            const avatar = remoteAvatars.get(player.id);
+            if (!avatar) { if (gameState.started) addRemoteAvatar(player); return; }
+            avatar.targetX = Number(player.x) || 0;
+            avatar.targetZ = Number(player.z) || 0;
+            avatar.rotation = Number(player.rotation) || 0;
+        }
+        function removeRemoteAvatar(id) {
+            const avatar = remoteAvatars.get(id);
+            if (avatar) { scene.remove(avatar.group); avatar.group.traverse(o => { o.geometry?.dispose?.(); if (o.material) { if (Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else o.material.dispose(); } }); remoteAvatars.delete(id); }
+        }
+        function updateRemoteAvatars(dt) {
+            remoteAvatars.forEach((avatar) => {
+                avatar.group.position.x += (avatar.targetX - avatar.group.position.x) * Math.min(1, dt * 12);
+                avatar.group.position.z += (avatar.targetZ - avatar.group.position.z) * Math.min(1, dt * 12);
+                avatar.group.rotation.y += (avatar.rotation - avatar.group.rotation.y) * Math.min(1, dt * 12);
+            });
+        }
+        function syncOnlineMovement(now) {
+            if (!onlineSocket?.connected || !onlineRoomId || !playerHero || now - lastNetworkSync < 66) return;
+            lastNetworkSync = now;
+            const moving = Boolean(moveDestination || keys['KeyW'] || keys['KeyA'] || keys['KeyS'] || keys['KeyD'] || keys['ArrowUp'] || keys['ArrowDown'] || keys['ArrowLeft'] || keys['ArrowRight']);
+            onlineSocket.emit('player:update', {
+                x: playerHero.mesh.position.x,
+                z: playerHero.mesh.position.z,
+                rotation: playerHero.mesh.rotation.y,
+                moving
+            });
+        }
+
+        function createPeerConnection(peerId, shouldOffer) {
+            if (peerConnections.has(peerId)) return peerConnections.get(peerId);
+            const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] });
+            peerConnections.set(peerId, pc);
+            localMediaStream.getTracks().forEach(track => pc.addTrack(track, localMediaStream));
+            pc.onicecandidate = (event) => {
+                if (event.candidate && onlineSocket?.connected) onlineSocket.emit('rtc:signal', { to: peerId, signal: { candidate: event.candidate } });
+            };
+            pc.ontrack = (event) => showRemoteMedia(peerId, event.streams[0]);
+            pc.onconnectionstatechange = () => {
+                if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) removeRemoteMedia(peerId);
+            };
+            if (shouldOffer) {
+                pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+                    onlineSocket.emit('rtc:signal', { to: peerId, signal: { description: pc.localDescription } });
+                }).catch(err => console.warn('WebRTC offer:', err));
+            }
+            return pc;
+        }
+        function renegotiatePeer(pc, peerId) {
+            if (pc.signalingState !== 'stable') return;
+            pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+                onlineSocket?.emit('rtc:signal', { to: peerId, signal: { description: pc.localDescription } });
+            }).catch(err => console.warn('WebRTC renegotiation:', err));
+        }
+        function showRemoteMedia(peerId, stream) {
+            const grid = document.getElementById('online-video-grid');
+            if (!grid) return;
+            let tile = document.getElementById('media-' + peerId);
+            if (!tile) {
+                tile = document.createElement('div');
+                tile.id = 'media-' + peerId;
+                tile.className = 'relative overflow-hidden rounded-lg border border-sky-500/40 bg-slate-900 w-32 h-24';
+                const video = document.createElement('video');
+                video.autoplay = true; video.playsInline = true; video.className = 'w-full h-full object-cover';
+                tile.appendChild(video);
+                const caption = document.createElement('span');
+                caption.className = 'absolute bottom-1 left-1 right-1 text-[9px] text-white bg-black/60 rounded px-1 truncate';
+                caption.textContent = onlinePlayers.get(peerId)?.name || 'Player';
+                tile.appendChild(caption);
+                grid.appendChild(tile);
+            }
+            tile.querySelector('video').srcObject = stream;
+            tile.querySelector('video').play().catch(() => {});
+        }
+        function removeRemoteMedia(peerId) {
+            document.getElementById('media-' + peerId)?.remove();
+        }
+        async function toggleMicrophone() {
+            if (!onlineRoomId) { onlineStatus('Bergabung ke room online terlebih dahulu untuk voice chat.', true); return; }
+            try {
+                if (microphoneEnabled) {
+                    localMediaStream.getAudioTracks().forEach(track => { track.stop(); localMediaStream.removeTrack(track); });
+                    microphoneEnabled = false;
+                } else {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
+                    stream.getAudioTracks().forEach(track => {
+                        localMediaStream.addTrack(track);
+                        peerConnections.forEach((pc, id) => { pc.addTrack(track, localMediaStream); renegotiatePeer(pc, id); });
+                    });
+                    microphoneEnabled = true;
+                }
+                updateCommsButtons();
+            } catch (err) { onlineStatus('Mikrofon tidak tersedia/diizinkan: ' + err.message, true); }
+        }
+        async function toggleCamera() {
+            if (!onlineRoomId) { onlineStatus('Bergabung ke room online terlebih dahulu untuk video chat.', true); return; }
+            try {
+                if (cameraEnabled) {
+                    localMediaStream.getVideoTracks().forEach(track => { track.stop(); localMediaStream.removeTrack(track); });
+                    cameraEnabled = false;
+                } else {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' } });
+                    stream.getVideoTracks().forEach(track => {
+                        localMediaStream.addTrack(track);
+                        peerConnections.forEach((pc, id) => { pc.addTrack(track, localMediaStream); renegotiatePeer(pc, id); });
+                    });
+                    cameraEnabled = true;
+                    showLocalCamera();
+                }
+                if (!cameraEnabled) document.getElementById('local-camera-tile')?.remove();
+                updateCommsButtons();
+            } catch (err) { onlineStatus('Kamera tidak tersedia/diizinkan: ' + err.message, true); }
+        }
+        function showLocalCamera() {
+            const grid = document.getElementById('online-video-grid');
+            if (!grid || !localMediaStream.getVideoTracks().length) return;
+            let tile = document.getElementById('local-camera-tile');
+            if (!tile) {
+                tile = document.createElement('div'); tile.id = 'local-camera-tile';
+                tile.className = 'relative overflow-hidden rounded-lg border border-emerald-500/50 bg-slate-900 w-32 h-24';
+                const video = document.createElement('video'); video.autoplay = true; video.muted = true; video.playsInline = true; video.className = 'w-full h-full object-cover';
+                tile.appendChild(video);
+                const caption = document.createElement('span'); caption.className = 'absolute bottom-1 left-1 text-[9px] text-white bg-black/60 rounded px-1'; caption.textContent = 'Anda';
+                tile.appendChild(caption); grid.appendChild(tile);
+            }
+            tile.querySelector('video').srcObject = localMediaStream;
+        }
+        function updateCommsButtons() {
+            const buttons = [
+                ['game-mic-btn', microphoneEnabled, 'MIC', 'MIC AKTIF', 'fa-microphone'],
+                ['lobby-mic-btn', microphoneEnabled, 'MIC', 'MIC AKTIF', 'fa-microphone'],
+                ['game-cam-btn', cameraEnabled, 'CAM', 'CAM AKTIF', 'fa-video'],
+                ['lobby-cam-btn', cameraEnabled, 'KAMERA', 'KAMERA AKTIF', 'fa-video']
+            ];
+            buttons.forEach(([id, active, offText, onText, icon]) => {
+                const el = document.getElementById(id);
+                if (el) { el.innerHTML = '<i class="fa-solid ' + icon + ' mr-1"></i>' + (active ? onText : offText); el.classList.toggle('text-emerald-300', active); el.classList.toggle('text-slate-300', !active); }
+            });
+        }
+        function closePeerConnection(id) {
+            const pc = peerConnections.get(id);
+            if (pc) { pc.close(); peerConnections.delete(id); }
+            removeRemoteMedia(id);
+        }
+        function leaveOnlineRoom() {
+            if (onlineSocket?.connected) onlineSocket.emit('room:leave');
+            peerConnections.forEach(pc => pc.close());
+            peerConnections.clear();
+            remoteAvatars.forEach((avatar, id) => removeRemoteAvatar(id));
+            localMediaStream.getTracks().forEach(track => track.stop());
+            localMediaStream = new MediaStream();
+            microphoneEnabled = false; cameraEnabled = false;
+            onlineRoomId = null; onlineSelfId = null; onlinePlayers.clear();
+            document.getElementById('online-video-grid').innerHTML = '';
+            document.getElementById('online-comms-bar').classList.add('hidden');
+            updateCommsButtons();
+            onlineStatus('Anda keluar dari room online.');
+        }
+
+        const savedRealtimeUrl = localStorage.getItem('legendsArenaRealtimeUrl');
+        if (savedRealtimeUrl) document.getElementById('online-server-url').value = savedRealtimeUrl;
 
         // ==========================================
         // 2. GAME STATE & CONFIGURATION
@@ -1166,6 +1517,15 @@
                 range: 3.6,
                 atkCooldown: 0.85
             });
+            if (onlineRoomId) {
+                const slot = Math.max(0, onlineSlot);
+                const spawnX = -48 + (slot % 3) * 3.2;
+                const spawnZ = 48 + Math.floor(slot / 3) * 3.2;
+                playerHero.mesh.position.set(spawnX, 0, spawnZ);
+                playerHero.spawnPos.set(spawnX, 0, spawnZ);
+                playerHero.name = document.getElementById('online-player-name')?.value || 'Player';
+                onlinePlayers.forEach(p => { if (p.id !== onlineSelfId) addRemoteAvatar(p); });
+            }
 
             // 4. Allied Bots (4 Heroes for 5v5)
             const blueBots = [
@@ -2080,6 +2440,7 @@
         }
 
         function startGame() {
+            if (gameState.started) return;
             initAudio();
             document.getElementById('lobby-screen').classList.add('hidden');
             document.getElementById('ui-layer').classList.remove('hidden');
@@ -2140,6 +2501,8 @@
                 }
 
                 updateEntities(dt);
+                syncOnlineMovement(now);
+                updateRemoteAvatars(dt);
                 updateCamera();
                 renderMinimap();
                 updateHUD();
