@@ -111,16 +111,15 @@ io.on("connection", (socket) => {
 });
 
 function joinRoom(socket, room, rawName, ack) {
+  const usedSlots = new Set([...room.players.values()].map((p) => p.slot));
+  let slot = 0;
+  while (usedSlots.has(slot) && slot < MAX_PLAYERS) slot++;
   const player = {
     id: socket.id,
     name: cleanName(rawName),
-    slot: (() => {
-      const used = new Set([...room.players.values()].map((p) => p.slot));
-      for (let i = 0; i < MAX_PLAYERS; i++) if (!used.has(i)) return i;
-      return 0;
-    })(),
-    x: -48 + (room.players.size % 3) * 3,
-    z: 48 + Math.floor(room.players.size / 3) * 3,
+    slot,
+    x: -48 + (slot % 3) * 3.2,
+    z: 48 + Math.floor(slot / 3) * 3.2,
     rotation: 0,
     moving: false
   };
