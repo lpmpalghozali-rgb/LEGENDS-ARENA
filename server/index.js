@@ -87,8 +87,12 @@ io.on("connection", (socket) => {
     const now = Date.now();
     if (now - (socket.data.lastMoveAt || 0) < 45) return;
     socket.data.lastMoveAt = now;
-    player.x = Math.max(-77, Math.min(77, payload.x));
-    player.z = Math.max(-77, Math.min(77, payload.z));
+    const nextX = Math.max(-77, Math.min(77, payload.x));
+    const nextZ = Math.max(-77, Math.min(77, payload.z));
+    // Reject large single-packet teleports; full authoritative movement validation is a later milestone.
+    if (Math.hypot(nextX - player.x, nextZ - player.z) > 2.0) return;
+    player.x = nextX;
+    player.z = nextZ;
     player.rotation = Number.isFinite(payload.rotation) ? payload.rotation : 0;
     player.moving = Boolean(payload.moving);
     socket.to(code).emit("player:moved", publicPlayer(player));
@@ -110,7 +114,11 @@ function joinRoom(socket, room, rawName, ack) {
   const player = {
     id: socket.id,
     name: cleanName(rawName),
-    slot: room.players.size,
+    slot: (() => {
+      const used = new Set([...room.players.values()].map((p) => p.slot));
+      for (let i = 0; i < MAX_PLAYERS; i++) if (!used.has(i)) return i;
+      return 0;
+    })(),
     x: -48 + (room.players.size % 3) * 3,
     z: 48 + Math.floor(room.players.size / 3) * 3,
     rotation: 0,
