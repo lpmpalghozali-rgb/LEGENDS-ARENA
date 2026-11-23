@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LEGENDS ARENA — Eternal Rift (3D MOBA)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js untuk efek suara sintetis tanpa aset eksternal -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Font Awesome untuk Ikon Skill & UI -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #090d16;
+            font-family: 'Inter', sans-serif;
+        }
+        .font-cinzel {
+            font-family: 'Cinzel', serif;
+        }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        /* PC / Laptop Skill Bar Styling */
+        .skill-btn {
+            position: relative;
+            border-radius: 14px;
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 2px solid #38bdf8;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(56, 189, 248, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            transition: transform 0.1s, border-color 0.2s, box-shadow 0.2s;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .skill-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(56, 189, 248, 0.45);
+        }
+        .skill-btn:active {
+            transform: scale(0.94);
+        }
+        .skill-btn.ult {
+            border-color: #f59e0b;
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4), inset 0 0 12px rgba(245, 158, 11, 0.4);
+        }
+        .skill-btn.basic-atk {
+            background: linear-gradient(145deg, #0284c7, #0369a1);
+            border: 2px solid #7dd3fc;
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.5);
+        }
+        .cd-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(9, 13, 22, 0.82);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            color: #38bdf8;
+            font-size: 1.1rem;
+        }
+        /* Floating Combat Text */
+        .dmg-text {
+            position: absolute;
+            font-weight: 900;
+            pointer-events: none;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+            animation: floatUp 0.9s ease-out forwards;
+            z-index: 20;
+        }
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(0.8); }
+            20% { transform: translate(-50%, -15px) scale(1.15); }
+            100% { opacity: 0; transform: translate(-50%, -45px) scale(0.9); }
+        }
+        /* Custom Scrollbar for Shop */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #38bdf8; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Floating Damage Container -->
+    <div id="floating-texts" class="fixed inset-0 pointer-events-none z-20"></div>
+
+    <!-- HUD Layer -->
+    <div id="ui-layer" class="hidden">
+        
+        <!-- Top Bar: Minimap, Scoreboard, Timer, Gold -->
+        <div class="flex justify-between items-start p-3 w-full">
+            
+            <!-- Left: Minimap & Hero Stats -->
+            <div class="flex items-start gap-3">
+                <!-- Minimap Canvas -->
+                <div class="relative rounded-xl overflow-hidden border-2 border-slate-700/80 bg-slate-900/90 shadow-xl interactive">
+                    <canvas id="minimap-canvas" width="130" height="130" class="block"></canvas>
+                    <div class="absolute bottom-1 right-1.5 text-[9px] font-bold text-slate-400 tracking-wider">ETERNAL RIFT</div>
+                </div>
+
+                <!-- Hero Portrait & Bars -->
+                <div class="bg-slate-900/85 backdrop-blur-md border border-slate-700/70 rounded-xl p-2.5 shadow-lg w-48 sm:w-56">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center font-cinzel font-black text-white text-sm border border-sky-300 shadow">
+                                K
+                            </div>
+                            <div>
+                                <div class="text-xs font-extrabold text-white tracking-wide leading-none">KAEL</div>
+                                <div class="text-[10px] text-sky-400 font-semibold">Lv.<span id="hud-level">1</span> • Tank</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span id="hud-kda" class="text-xs font-bold text-slate-200">0/0/0</span>
+                        </div>
+                    </div>
+                    <!-- HP Bar -->
+                    <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden mb-1 border border-slate-700 relative">
+                        <div id="hud-hp-bar" class="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-150" style="width: 100%;"></div>
+                        <span id="hud-hp-text" class="absolute inset-0 text-[8px] font-bold text-white flex items-center justify-center drop-shadow">3500 / 3500</span>
+                    </div>
+                    <!-- Mana Bar -->
+                    <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden mb-1.5 border border-slate-700 relative">
+                        <div id="hud-mana-bar" class="h-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all duration-150" style="width: 100%;"></div>
+                    </div>
+                    <!-- XP Bar -->
+                    <div class="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div id="hud-xp-bar" class="h-full bg-amber-400 transition-all duration-150" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Scoreboard & Match Timer -->
+            <div class="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl px-4 py-1.5 shadow-xl flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-sky-500 shadow-[0_0_8px_#0ea5e9]"></span>
+                    <span id="score-blue" class="text-lg font-black text-sky-400">0</span>
+                </div>
+                <div class="flex flex-col items-center px-2 border-x border-slate-700/80">
+                    <span id="match-timer" class="text-xs font-extrabold text-white tracking-widest">00:00</span>
+                    <span class="text-[9px] text-amber-400 font-bold uppercase tracking-wider">5v5 Ranked</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="score-red" class="text-lg font-black text-rose-500">0</span>
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]"></span>
+                </div>
+            </div>
+
+            <!-- Right: Gold, Shop Button & Sound Toggle -->
+            <div class="flex flex-col items-end gap-2 interactive">
+                <div class="flex items-center gap-2">
+                    <!-- Gold / Shop Trigger -->
+                    <button onclick="toggleShop()" class="bg-slate-900/90 hover:bg-slate-800 border border-amber-500/60 rounded-xl px-3 py-1.5 flex items-center gap-2 shadow-lg transition active:scale-95">
+                        <i class="fa-solid fa-coins text-amber-400 text-sm"></i>
+                        <span id="hud-gold" class="text-xs font-extrabold text-amber-300">500</span>
+                        <span class="bg-amber-500/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded font-bold border border-amber-500/40">SHOP</span>
+                    </button>
+
+                    <!-- Camera Mode Toggle -->
+                    <button id="btn-cam" onclick="toggleCameraMode()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-xl p-2 text-slate-300 hover:text-white shadow-lg transition" title="Ganti Kamera">
+                        <i class="fa-solid fa-video text-xs"></i>
+                    </button>
+
+                    <!-- Audio Toggle -->
+                    <button id="btn-audio" onclick="toggleAudio()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 rounded-xl p-2 text-sky-400 shadow-lg transition" title="Suara">
+                        <i class="fa-solid fa-volume-high text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Objective / Announcer Banner -->
+                <div id="announcer-box" class="hidden bg-gradient-to-r from-slate-900/95 via-sky-950/95 to-slate-900/95 border border-sky-500/50 rounded-xl px-3 py-1.5 text-center shadow-lg max-w-xs">
+                    <div id="announcer-text" class="text-xs font-bold text-sky-200">Minion telah dikerahkan!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Passive Status Indicator -->
+        <div id="passive-badge" class="hidden absolute top-36 left-4 bg-amber-500/20 border border-amber-400/60 backdrop-blur-sm rounded-lg px-2.5 py-1 flex items-center gap-1.5">
+            <i class="fa-solid fa-shield-halved text-amber-400 text-xs animate-pulse"></i>
+            <span class="text-[10px] font-bold text-amber-200">Guardian Soul Aktif (+Armor)</span>
+        </div>
+
+        <!-- Bottom Left: Laptop / PC Controls Guide -->
+        <div class="hidden sm:flex flex-col gap-1.5 absolute bottom-4 left-4 bg-slate-900/85 backdrop-blur-md border border-slate-700/80 rounded-xl p-3 text-[11px] text-slate-300 shadow-xl">
+            <div class="text-xs font-extrabold text-sky-400 tracking-wider mb-0.5"><i class="fa-solid fa-computer-mouse mr-1.5"></i>KONTROL LAPTOP / PC</div>
+            <div><span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">Klik Kanan</span> Gerak / Serang Musuh</div>
+            <div><span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">W A S D</span> Gerak Manual • <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">Space</span> Serang</div>
+            <div><span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">Q E R F</span> Skill • <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">B</span> Recall • <span class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-white font-bold">P</span> Shop</div>
+        </div>
+
+        <!-- Bottom Center: PC MOBA Action Bar -->
+        <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-end gap-2.5 bg-slate-950/85 backdrop-blur-md border border-slate-700/80 px-4 py-2.5 rounded-2xl shadow-2xl interactive">
+            
+            <!-- Basic Attack Button -->
+            <button id="btn-attack" class="skill-btn basic-atk w-14 h-14" title="Basic Attack (Space / Klik Kanan Musuh)">
+                <i class="fa-solid fa-khanda text-white text-lg"></i>
+                <span class="text-[9px] font-extrabold text-sky-100 mt-0.5">SPACE</span>
+            </button>
+
+            <!-- Target Lock: Minion / Jungle -->
+            <button id="btn-atk-minion" onclick="triggerTargetedAttack('minion')" class="skill-btn w-12 h-12 border-emerald-400/80" title="Serang Minion / Monster (Tombol M)">
+                <i class="fa-solid fa-dragon text-emerald-300 text-sm"></i>
+                <span class="text-[8px] font-extrabold text-emerald-200 mt-0.5">MINION</span>
+            </button>
+
+            <!-- Target Lock: Turret / Core -->
+            <button id="btn-atk-turret" onclick="triggerTargetedAttack('turret')" class="skill-btn w-12 h-12 border-amber-400/80" title="Serang Turret / Core (Tombol T)">
+                <i class="fa-solid fa-chess-rook text-amber-300 text-sm"></i>
+                <span class="text-[8px] font-extrabold text-amber-200 mt-0.5">TURRET</span>
+            </button>
+
+            <div class="w-px h-10 bg-slate-700/80 mx-0.5"></div>
+
+            <!-- Skill 1: Shield Bash (Q) -->
+            <button id="btn-skill-1" onclick="castSkill(1)" class="skill-btn w-14 h-14" title="Shield Bash — Stun AoE (Q)">
+                <i class="fa-solid fa-gavel text-sky-300 text-lg"></i>
+                <span class="text-[10px] font-extrabold text-sky-200 mt-0.5">Q</span>
+                <div id="cd-skill-1" class="cd-overlay hidden">6</div>
+            </button>
+
+            <!-- Skill 2: Aether Wall (E) -->
+            <button id="btn-skill-2" onclick="castSkill(2)" class="skill-btn w-14 h-14" title="Aether Wall — Perisai Pelindung (E)">
+                <i class="fa-solid fa-shield text-cyan-300 text-lg"></i>
+                <span class="text-[10px] font-extrabold text-cyan-200 mt-0.5">E</span>
+                <div id="cd-skill-2" class="cd-overlay hidden">8</div>
+            </button>
+
+            <!-- Skill 3: Guardian Charge (R) -->
+            <button id="btn-skill-3" onclick="castSkill(3)" class="skill-btn w-14 h-14" title="Guardian Charge — Terjang ke Depan (R)">
+                <i class="fa-solid fa-bolt text-indigo-300 text-lg"></i>
+                <span class="text-[10px] font-extrabold text-indigo-200 mt-0.5">R</span>
+                <div id="cd-skill-3" class="cd-overlay hidden">10</div>
+            </button>
+
+            <!-- Ultimate: Eternal Fortress (F) -->
+            <button id="btn-skill-4" onclick="castSkill(4)" class="skill-btn ult w-16 h-16" title="Ultimate: Eternal Fortress (F)">
+                <i class="fa-solid fa-crown text-amber-400 text-xl"></i>
+                <span class="text-[10px] font-extrabold text-amber-300 mt-0.5">ULT (F)</span>
+                <div id="cd-skill-4" class="cd-overlay hidden">24</div>
+            </button>
+
+            <div class="w-px h-10 bg-slate-700/80 mx-0.5"></div>
+
+            <!-- Recall Button -->
+            <button onclick="castRecall()" class="skill-btn w-12 h-12 border-sky-400/70" title="Recall ke Base (B)">
+                <i class="fa-solid fa-arrows-rotate text-sky-300 text-sm"></i>
+                <span class="text-[8px] font-bold text-slate-300 mt-0.5">B</span>
+            </button>
+        </div>
+
+        <!-- Equipment Shop Modal -->
+        <div id="shop-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 flex items-center justify-center p-4 interactive">
+            <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-5 shadow-2xl">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-store text-amber-400 text-lg"></i>
+                        <h3 class="font-cinzel font-bold text-lg text-white">AETHER ARMORY</h3>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold text-amber-400"><i class="fa-solid fa-coins mr-1"></i><span id="shop-gold">500</span></span>
+                        <button onclick="toggleShop()" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-600 text-white flex items-center justify-center transition">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="shop-items-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
+                    <!-- Items populated by JS -->
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center">
+                    <div class="text-xs text-slate-400">Slot Equipment: <span id="equipped-count" class="text-white font-bold">0/6</span></div>
+                    <button onclick="toggleShop()" class="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-lg transition">Tutup</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Respawn Overlay -->
+        <div id="respawn-overlay" class="hidden fixed inset-0 bg-slate-950/60 backdrop-blur-[2px] z-30 flex flex-col items-center justify-center pointer-events-none">
+            <div class="bg-slate-900/95 border border-rose-500/60 rounded-2xl px-8 py-5 text-center shadow-2xl">
+                <div class="text-rose-500 font-cinzel font-black text-2xl tracking-wider mb-1">ANDA TELAH GUGUR</div>
+                <div class="text-slate-300 text-sm">Bangkit kembali di Altar Dawn dalam <span id="respawn-timer" class="text-amber-400 font-black text-lg">5</span> detik...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Menu / Lobby Overlay -->
+    <div id="lobby-screen" class="fixed inset-0 z-50 bg-gradient-to-br from-slate-950 via-[#0b132b] to-slate-950 flex flex-col items-center justify-center p-4">
+        <!-- Decorative Glow -->
+        <div class="absolute w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute bottom-10 right-10 w-80 h-80 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="max-w-2xl w-full bg-slate-900/80 backdrop-blur-xl border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-400 text-xs font-bold tracking-wider mb-4">
+                <span class="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
+                ETERNAL RIFT • 5v5 MOBA ENGINE
+            </div>
+
+            <h1 class="font-cinzel font-black text-3xl sm:text-5xl text-transparent bg-clip-text bg-gradient-to-r from-sky-300 via-white to-amber-300 tracking-wide mb-2">
+                LEGENDS ARENA
+            </h1>
+            <p class="text-slate-400 text-xs sm:text-sm max-w-md mx-auto mb-6">
+                Pertempuran 5v5 antara <span class="text-sky-400 font-semibold">Kingdom of Dawn</span> dan <span class="text-rose-400 font-semibold">Kingdom of Dusk</span> memperebutkan Aether Core.
+            </p>
+
+            <!-- Hero Preview Card -->
+            <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 mb-6 text-left flex flex-col sm:flex-row items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-700 border-2 border-sky-300 flex items-center justify-center shrink-0 shadow-lg">
+                    <i class="fa-solid fa-shield-halved text-white text-3xl"></i>
+                </div>
+                <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-cinzel font-bold text-lg text-white">KAEL <span class="text-xs font-sans font-semibold text-sky-400 ml-1">— The Eternal Guardian</span></h2>
+                        <span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[10px] font-bold border border-sky-500/30">TANK / INITIATOR</span>
+                    </div>
+                    <p class="text-xs text-slate-300 mt-1">Pelindung kuno dengan perisai Aether. Mampu menahan serangan turret dan mengunci pergerakan musuh.</p>
+                    <div class="grid grid-cols-4 gap-2 mt-3 text-[11px]">
+                        <div class="bg-slate-900/80 px-2 py-1 rounded border border-slate-700/60"><span class="text-slate-400">HP:</span> <b class="text-emerald-400">3500</b></div>
+                        <div class="bg-slate-900/80 px-2 py-1 rounded border border-slate-700/60"><span class="text-slate-400">ATK:</span> <b class="text-amber-400">120</b></div>
+                        <div class="bg-slate-900/80 px-2 py-1 rounded border border-slate-700/60"><span class="text-slate-400">ARM:</span> <b class="text-sky-400">100</b></div>
+                        <div class="bg-slate-900/80 px-2 py-1 rounded border border-slate-700/60"><span class="text-slate-400">SPD:</span> <b class="text-purple-400">4.5</b></div>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="startGame()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-extrabold text-base tracking-wider shadow-[0_0_25px_rgba(14,165,233,0.5)] transition transform hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3">
+                <i class="fa-solid fa-play"></i>
+                MASUK KE ETERNAL RIFT (5v5)
+            </button>
+        </div>
+    </div>
+
+    <!-- Victory / Defeat Modal -->
+    <div id="gameover-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-amber-500/70 rounded-3xl max-w-md w-full p-8 text-center shadow-2xl">
+            <div id="gameover-icon" class="w-20 h-20 mx-auto rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center mb-4">
+                <i class="fa-solid fa-trophy text-4xl text-amber-400"></i>
+            </div>
+            <h2 id="gameover-title" class="font-cinzel font-black text-3xl text-amber-400 tracking-wider mb-2">VICTORY!</h2>
+            <p id="gameover-desc" class="text-slate-300 text-sm mb-6">Aether Core Kingdom of Dusk telah dihancurkan!</p>
+            <div class="bg-slate-800/80 rounded-xl p-3 mb-6 flex justify-around text-xs">
+                <div><div class="text-slate-400">K/D/A</div><div id="end-kda" class="font-bold text-white text-sm mt-0.5">0/0/0</div></div>
+                <div><div class="text-slate-400">Durasi</div><div id="end-time" class="font-bold text-sky-400 text-sm mt-0.5">00:00</div></div>
+                <div><div class="text-slate-400">Rank Points</div><div id="end-rp" class="font-bold text-emerald-400 text-sm mt-0.5">+25 RP</div></div>
+            </div>
+            <button onclick="location.reload()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-sm tracking-wider transition">
+                MAIN LAGI
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * LEGENDS ARENA — ETERNAL RIFT (Web 3D MOBA Engine)
+         * Arsitektur terinspirasi dari spesifikasi GDD:
+         * - 2 Tim: Kingdom of Dawn (Blue) vs Kingdom of Dusk (Red)
+         * - 3 Lane (Top, Mid, Bottom), River, Jungle, Turrets, Minions, Aether Guardian, dan Base Core
+         * - Hero KAEL (Tank) dengan 4 Skill + Passive + Basic Attack + Equipment Shop
+         */
+
+        // ==========================================
+        // 1. AUDIO ENGINE (TONE.JS SYNTH)
+        // ==========================================
+        let audioEnabled = true;
+        let synth, polySynth;
+
+        function initAudio() {
+            if (typeof Tone === 'undefined') return;
+            try {
+                Tone.start();
+                synth = new Tone.MembraneSynth().toDestination();
+                polySynth = new Tone.PolySynth(Tone.Synth).toDestination();
+                polySynth.volume.value = -10;
+                synth.volume.value = -8;
+            } catch (e) {
+                console.warn("Audio init skipped:", e);
+            }
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('btn-audio');
+            btn.innerHTML = audioEnabled
+                ? '<i class="fa-solid fa-volume-high text-xs"></i>'
+                : '<i class="fa-solid fa-volume-xmark text-xs text-rose-400"></i>';
+        }
+
+        function playSound(type) {
+            if (!audioEnabled || !synth || !polySynth) return;
+            try {
+                const now = Tone.now();
+                if (type === 'attack') {
+                    synth.triggerAttackRelease("C2", "16n", now);
+                } else if (type === 'skill') {
+                    polySynth.triggerAttackRelease(["E4", "B4"], "8n", now);
+                } else if (type === 'ult') {
+                    polySynth.triggerAttackRelease(["C3", "G3", "C4", "E4"], "4n", now);
+                } else if (type === 'kill') {
+                    polySynth.triggerAttackRelease(["G4", "B4", "D5"], "8n", now);
+                } else if (type === 'buy') {
+                    polySynth.triggerAttackRelease(["A4", "E5"], "16n", now);
+                }
+            } catch (e) {}
+        }
+
+        // ==========================================
+        // 2. GAME STATE & CONFIGURATION
+        // ==========================================
+        const MAP_SIZE = 160;
+        const HALF_MAP = MAP_SIZE / 2;
+
+        const gameState = {
+            started: false,
+            ended: false,
+            time: 0,
+            blueKills: 0,
+            redKills: 0,
+            cameraMode: 'follow', // 'follow' or 'overview'
+            lastWaveTime: 0
+        };
+
+        const SHOP_ITEMS = [
+            { id: 'boots', name: 'Swift Aether Boots', desc: '+1.2 Movement Speed', cost: 250, icon: 'fa-shoe-prints', color: 'text-sky-400', stat: { speed: 1.2 } },
+            { id: 'armor', name: 'Dawn Plate Armor', desc: '+45 Armor, +400 HP', cost: 450, icon: 'fa-shield-halved', color: 'text-amber-400', stat: { armor: 45, maxHp: 400 } },
+            { id: 'blade', name: 'Sunfire Greatsword', desc: '+45 Attack Damage', cost: 500, icon: 'fa-khanda', color: 'text-rose-400', stat: { atk: 45 } },
+            { id: 'heart', name: 'Eternal Guardian Heart', desc: '+900 Max HP, +25 Armor', cost: 750, icon: 'fa-heart', color: 'text-emerald-400', stat: { maxHp: 900, armor: 25 } },
+            { id: 'crown', name: 'Aether Sovereign Crown', desc: '+70 ATK, +500 HP', cost: 950, icon: 'fa-crown', color: 'text-purple-400', stat: { atk: 70, maxHp: 500 } },
+            { id: 'aegis', name: 'Immortal Bulwark', desc: '+80 Armor, +800 HP', cost: 1100, icon: 'fa-chess-rook', color: 'text-cyan-400', stat: { armor: 80, maxHp: 800 } }
+        ];
+
+        // ==========================================
+        // 3. THREE.JS SCENE & LIGHTING SETUP
+        // ==========================================
+        const canvas = document.getElementById('game-canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b1220);
+        scene.fog = new THREE.FogExp2(0x0b1220, 0.0055);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 400);
+        camera.position.set(0, 42, 42);
+
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x8faadc, 0.75);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff4e0, 1.15);
+        dirLight.position.set(45, 85, 45);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 10;
+        dirLight.shadow.camera.far = 220;
+        const d = 95;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        // ==========================================
+        // 4. MAP BUILDER: ETERNAL RIFT (3 LANES)
+        // ==========================================
+        function buildEternalRift() {
+            // Base Jungle Grass Terrain
+            const groundGeo = new THREE.PlaneGeometry(MAP_SIZE, MAP_SIZE);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x132a22, roughness: 0.9 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Outer Map Border Walls
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
+            const borderThickness = 4;
+            const walls = [
+                [0, 2, -HALF_MAP - 2, MAP_SIZE + 8, 4, borderThickness],
+                [0, 2, HALF_MAP + 2, MAP_SIZE + 8, 4, borderThickness],
+                [-HALF_MAP - 2, 2, 0, borderThickness, 4, MAP_SIZE],
+                [HALF_MAP + 2, 2, 0, borderThickness, 4, MAP_SIZE]
+            ];
+            walls.forEach(([x, y, z, w, h, dep]) => {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dep), wallMat);
+                m.position.set(x, y, z);
+                scene.add(m);
+            });
+
+            // Stone Road Material for Lanes
+            const laneMat = new THREE.MeshStandardMaterial({ color: 0x3b4252, roughness: 0.85 });
+
+            function addRoad(x, z, w, l, rotY = 0) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.15, l), laneMat);
+                mesh.position.set(x, 0.08, z);
+                mesh.rotation.y = rotY;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+            }
+
+            // Top Lane (West & North edges)
+            addRoad(-62, 0, 12, 136, 0);
+            addRoad(0, -62, 136, 12, 0);
+
+            // Bottom Lane (South & East edges)
+            addRoad(0, 62, 136, 12, 0);
+            addRoad(62, 0, 12, 136, 0);
+
+            // Mid Lane (Diagonal from SW Blue Base to NE Red Base)
+            addRoad(0, 0, 12, 185, Math.PI / 4);
+
+            // River (Diagonal from NW to SE)
+            const riverMat = new THREE.MeshStandardMaterial({
+                color: 0x0284c7,
+                roughness: 0.2,
+                metalness: 0.3,
+                transparent: true,
+                opacity: 0.85
+            });
+            const river = new THREE.Mesh(new THREE.BoxGeometry(14, 0.12, 195), riverMat);
+            river.position.set(0, 0.09, 0);
+            river.rotation.y = -Math.PI / 4;
+            scene.add(river);
+
+            // Jungle Trees / Rocks
+            const treeGeo = new THREE.ConeGeometry(2.2, 5.5, 6);
+            const treeMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.8 });
+            const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 2, 6);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+
+            const treeSpots = [
+                [-35, -35], [-42, -20], [-22, -42], [-40, 15], [-15, 38],
+                [35, 35], [42, 20], [22, 42], [40, -15], [15, -38],
+                [-28, 12], [28, -12], [-12, -25], [12, 25]
+            ];
+            treeSpots.forEach(([tx, tz]) => {
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.set(tx, 1, tz);
+                trunk.castShadow = true;
+                scene.add(trunk);
+
+                const leaves = new THREE.Mesh(treeGeo, treeMat);
+                leaves.position.set(tx, 4.2, tz);
+                leaves.castShadow = true;
+                scene.add(leaves);
+            });
+
+            // Team Base Platforms
+            const blueBaseGeo = new THREE.CylinderGeometry(14, 15, 0.4, 24);
+            const blueBaseMat = new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.5 });
+            const blueBase = new THREE.Mesh(blueBaseGeo, blueBaseMat);
+            blueBase.position.set(-60, 0.2, 60);
+            blueBase.receiveShadow = true;
+            scene.add(blueBase);
+
+            const redBaseGeo = new THREE.CylinderGeometry(14, 15, 0.4, 24);
+            const redBaseMat = new THREE.MeshStandardMaterial({ color: 0xbe123c, roughness: 0.5 });
+            const redBase = new THREE.Mesh(redBaseGeo, redBaseMat);
+            redBase.position.set(60, 0.2, -60);
+            redBase.receiveShadow = true;
+            scene.add(redBase);
+        }
+
+        // ==========================================
+        // 5. ENTITIES: HUMANOID 3D HEROES, TURRETS, MINIONS, BOSS
+        // ==========================================
+        const entities = [];
+        const projectiles = [];
+        const vfxList = [];
+        let playerHero = null;
+        let lockedTarget = null;
+        let preferredTargetType = 'any';
+        let isHoldingAttack = false;
+        let targetIndicatorMesh = null;
+
+        function createTargetIndicator() {
+            const geo = new THREE.RingGeometry(1.35, 1.75, 32);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+            targetIndicatorMesh = new THREE.Mesh(geo, mat);
+            targetIndicatorMesh.rotation.x = -Math.PI / 2;
+            targetIndicatorMesh.position.y = 0.14;
+            targetIndicatorMesh.visible = false;
+            scene.add(targetIndicatorMesh);
+        }
+
+        function createHealthBarSprite(name, team) {
+            const c = document.createElement('canvas');
+            c.width = 256;
+            c.height = 64;
+            const ctx = c.getContext('2d');
+
+            const tex = new THREE.CanvasTexture(c);
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            sprite.scale.set(5.5, 1.4, 1);
+            sprite.userData = { canvas: c, ctx, tex, name, team };
+            return sprite;
+        }
+
+        function updateHealthBarSprite(entity) {
+            if (!entity.hpSprite) return;
+            const { canvas: c, ctx, tex, name, team } = entity.hpSprite.userData;
+            ctx.clearRect(0, 0, c.width, c.height);
+
+            // Name Tag
+            ctx.font = 'bold 20px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillStyle = team === 'blue' ? '#7dd3fc' : (team === 'neutral' ? '#e879f9' : '#fda4af');
+            ctx.fillText(name, 128, 22);
+
+            // Bar Background
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+            ctx.fillRect(28, 30, 200, 18);
+
+            // HP Fill
+            const ratio = Math.max(0, entity.hp / entity.maxHp);
+            ctx.fillStyle = entity.isPlayer ? '#10b981' : (team === 'blue' ? '#0ea5e9' : (team === 'neutral' ? '#a855f7' : '#f43f5e'));
+            ctx.fillRect(30, 32, 196 * ratio, 14);
+
+            // Shield Overlay
+            if (entity.shieldAmount > 0) {
+                const shieldRatio = Math.min(1, entity.shieldAmount / entity.maxHp);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+                ctx.fillRect(30, 32, 196 * shieldRatio, 14);
+            }
+
+            tex.needsUpdate = true;
+        }
+
+        /**
+         * Membangun model karakter manusia 3D lengkap dengan kepala, helm/mahkota,
+         * baju zirah (chestplate), pelindung bahu (pauldrons), jubah, lengan, kaki, dan senjata.
+         */
+        function createHumanoidMesh(team, role = 'Tank', scale = 1.0, isPlayer = false) {
+            const group = new THREE.Group();
+
+            // Palet warna berdasarkan tim & role
+            const primaryColor = isPlayer ? 0x0284c7 : (team === 'blue' ? 0x2563eb : (team === 'neutral' ? 0x7e22ce : 0xe11d48));
+            const secondaryColor = isPlayer ? 0xf59e0b : (team === 'blue' ? 0x93c5fd : (team === 'neutral' ? 0xf0abfc : 0xfda4af));
+            const skinColor = team === 'neutral' ? 0xc084fc : 0xf1c27d;
+            const darkMetal = 0x1e293b;
+
+            const armorMat = new THREE.MeshStandardMaterial({ color: primaryColor, roughness: 0.35, metalness: 0.45 });
+            const trimMat = new THREE.MeshStandardMaterial({ color: secondaryColor, roughness: 0.25, metalness: 0.7 });
+            const skinMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.6 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: darkMetal, roughness: 0.7 });
+
+            // Rig root untuk animasi bobbing saat berlari
+            const rig = new THREE.Group();
+            group.add(rig);
+
+            // 1. Batang Tubuh (Torso / Chestplate)
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.15, 0.55), armorMat);
+            torso.position.y = 1.65;
+            torso.castShadow = true;
+            rig.add(torso);
+
+            // Sabuk & Pelindung Dada Emas/Perak
+            const chestEmblem = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.6), trimMat);
+            chestEmblem.position.y = 1.75;
+            rig.add(chestEmblem);
+
+            // Jubah Belakang (Cape)
+            const cape = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.3, 0.08), armorMat);
+            cape.position.set(0, 1.5, -0.34);
+            cape.rotation.x = 0.14;
+            cape.castShadow = true;
+            rig.add(cape);
+
+            // 2. Kepala & Helm / Mahkota
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 2.55, 0);
+            rig.add(headGroup);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.58, 0.56), skinMat);
+            head.castShadow = true;
+            headGroup.add(head);
+
+            // Mata Bercahaya
+            const eyeMat = new THREE.MeshBasicMaterial({ color: isPlayer ? 0x38bdf8 : (team === 'blue' ? 0x60a5fa : 0xfbbf24) });
+            const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.05), eyeMat);
+            leftEye.position.set(-0.14, 0.04, 0.28);
+            const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.05), eyeMat);
+            rightEye.position.set(0.14, 0.04, 0.28);
+            headGroup.add(leftEye, rightEye);
+
+            // Helm / Mahkota Ksatria
+            const helmet = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.28, 0.62), trimMat);
+            helmet.position.y = 0.24;
+            headGroup.add(helmet);
+
+            if (isPlayer || role === 'Boss') {
+                const crest = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.45, 4), trimMat);
+                crest.position.set(0, 0.52, 0);
+                headGroup.add(crest);
+            }
+
+            // 3. Lengan Kiri + Perisai (untuk Tank/Fighter/Kael)
+            const leftArmPivot = new THREE.Group();
+            leftArmPivot.position.set(-0.68, 2.1, 0);
+            rig.add(leftArmPivot);
+
+            const leftPauldron = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), trimMat);
+            leftArmPivot.add(leftPauldron);
+
+            const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.32), darkMat);
+            leftArm.position.y = -0.45;
+            leftArm.castShadow = true;
+            leftArmPivot.add(leftArm);
+
+            if (isPlayer || role === 'Tank' || role === 'Minion') {
+                // Perisai Aether di Tangan Kiri
+                const shield = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.15, 0.85), trimMat);
+                shield.position.set(-0.22, -0.5, 0.25);
+                shield.castShadow = true;
+                leftArmPivot.add(shield);
+
+                const shieldCore = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.55, 0.35), armorMat);
+                shieldCore.position.set(-0.24, -0.5, 0.25);
+                leftArmPivot.add(shieldCore);
+            }
+
+            // 4. Lengan Kanan + Senjata (Pedang / Tongkat Sihir)
+            const rightArmPivot = new THREE.Group();
+            rightArmPivot.position.set(0.68, 2.1, 0);
+            rig.add(rightArmPivot);
+
+            const rightPauldron = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 10), trimMat);
+            rightArmPivot.add(rightPauldron);
+
+            const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.9, 0.32), darkMat);
+            rightArm.position.y = -0.45;
+            rightArm.castShadow = true;
+            rightArmPivot.add(rightArm);
+
+            // Senjata di Tangan Kanan
+            const weaponGroup = new THREE.Group();
+            weaponGroup.position.set(0, -0.82, 0.25);
+            rightArmPivot.add(weaponGroup);
+
+            if (role === 'Mage' || role === 'Support') {
+                // Tongkat Sihir + Kristal
+                const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.9, 8), darkMat);
+                staff.rotation.x = Math.PI / 2.3;
+                weaponGroup.add(staff);
+
+                const orb = new THREE.Mesh(new THREE.OctahedronGeometry(0.24, 0), trimMat);
+                orb.position.set(0, 0.2, 0.95);
+                weaponGroup.add(orb);
+            } else {
+                // Pedang Ksatria
+                const hilt = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.14), trimMat);
+                weaponGroup.add(hilt);
+
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.06, 1.45), new THREE.MeshStandardMaterial({
+                    color: 0xe2e8f0,
+                    emissive: isPlayer ? 0x0284c7 : 0x000000,
+                    emissiveIntensity: 0.4,
+                    metalness: 0.85,
+                    roughness: 0.15
+                }));
+                blade.position.set(0, 0, 0.78);
+                blade.castShadow = true;
+                weaponGroup.add(blade);
+            }
+
+            // 5. Kaki Kiri & Kaki Kanan (dengan Pivot Pinggul untuk Animasi Berlari)
+            const leftLegPivot = new THREE.Group();
+            leftLegPivot.position.set(-0.26, 1.05, 0);
+            rig.add(leftLegPivot);
+
+            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 1.05, 0.38), darkMat);
+            leftLeg.position.y = -0.52;
+            leftLeg.castShadow = true;
+            leftLegPivot.add(leftLeg);
+
+            const rightLegPivot = new THREE.Group();
+            rightLegPivot.position.set(0.26, 1.05, 0);
+            rig.add(rightLegPivot);
+
+            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 1.05, 0.38), darkMat);
+            rightLeg.position.y = -0.52;
+            rightLeg.castShadow = true;
+            rightLegPivot.add(rightLeg);
+
+            // Cincin Aether di bawah kaki Hero
+            if (role !== 'Minion') {
+                const ringGeo = new THREE.RingGeometry(0.95, 1.2, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: isPlayer ? 0x34d399 : primaryColor,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = -Math.PI / 2;
+                ring.position.y = 0.12;
+                group.add(ring);
+            }
+
+            group.scale.set(scale, scale, scale);
+
+            // Simpan referensi bagian tubuh untuk animasi berjalan & menyerang
+            group.userData.animParts = {
+                rig,
+                leftArmPivot,
+                rightArmPivot,
+                leftLegPivot,
+                rightLegPivot,
+                walkPhase: Math.random() * Math.PI * 2,
+                attackAnimTimer: 0
+            };
+
+            return group;
+        }
+
+        function createEntity(config) {
+            let mesh;
+
+            if (config.type === 'hero') {
+                mesh = createHumanoidMesh(config.team, config.role || 'Fighter', config.isPlayer ? 1.15 : 1.05, config.isPlayer);
+            } else if (config.type === 'minion') {
+                mesh = createHumanoidMesh(config.team, 'Minion', 0.65, false);
+            } else if (config.type === 'turret') {
+                mesh = new THREE.Group();
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.4, 5.5, 8), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+                base.position.y = 2.75;
+                base.castShadow = true;
+                mesh.add(base);
+
+                const crystalColor = config.team === 'blue' ? 0x38bdf8 : 0xf43f5e;
+                const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(1.2, 0), new THREE.MeshStandardMaterial({ color: crystalColor, emissive: crystalColor, emissiveIntensity: 0.6 }));
+                crystal.position.y = 6.5;
+                mesh.add(crystal);
+                mesh.userData.crystal = crystal;
+            } else if (config.type === 'core') {
+                mesh = new THREE.Group();
+                const altar = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 4.5, 2.5, 12), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+                altar.position.y = 1.25;
+                mesh.add(altar);
+
+                const coreColor = config.team === 'blue' ? 0x0ea5e9 : 0xe11d48;
+                const coreCrystal = new THREE.Mesh(new THREE.OctahedronGeometry(2.4, 1), new THREE.MeshStandardMaterial({ color: coreColor, emissive: coreColor, emissiveIntensity: 0.8 }));
+                coreCrystal.position.y = 5.2;
+                mesh.add(coreCrystal);
+                mesh.userData.crystal = coreCrystal;
+            } else if (config.type === 'boss') {
+                // Aether Guardian raksasa berbentuk ksatria titan
+                mesh = createHumanoidMesh('neutral', 'Boss', 1.85, false);
+            }
+
+            mesh.position.set(config.x, 0, config.z);
+            scene.add(mesh);
+
+            const hpSprite = createHealthBarSprite(config.name, config.team);
+            const barHeight = config.type === 'core' ? 9.5 : (config.type === 'turret' ? 8.5 : (config.type === 'boss' ? 7.2 : (config.type === 'minion' ? 3.2 : 4.6)));
+            hpSprite.position.set(0, barHeight, 0);
+            mesh.add(hpSprite);
+
+            const entity = {
+                id: Math.random().toString(36).substr(2, 9),
+                name: config.name,
+                type: config.type, // 'hero', 'minion', 'turret', 'core', 'boss'
+                team: config.team, // 'blue', 'red', 'neutral'
+                isPlayer: !!config.isPlayer,
+                mesh,
+                hpSprite,
+                maxHp: config.maxHp,
+                hp: config.maxHp,
+                maxMana: config.maxMana || 500,
+                mana: config.maxMana || 500,
+                atk: config.atk,
+                armor: config.armor || 20,
+                speed: config.speed || 0,
+                range: config.range || 3.5,
+                atkCooldown: config.atkCooldown || 1.1,
+                lastAtkTime: 0,
+                shieldAmount: 0,
+                stunTimer: 0,
+                dead: false,
+                respawnTimer: 0,
+                spawnPos: new THREE.Vector3(config.x, 0, config.z),
+                waypoints: config.waypoints || [],
+                waypointIndex: 0,
+                // Player stats
+                level: 1,
+                xp: 0,
+                gold: 500,
+                kills: 0,
+                deaths: 0,
+                assists: 0,
+                items: []
+            };
+
+            updateHealthBarSprite(entity);
+            entities.push(entity);
+            return entity;
+        }
+
+        function initMatchEntities() {
+            createTargetIndicator();
+
+            // 1. Base Cores
+            createEntity({ name: 'DAWN CORE', type: 'core', team: 'blue', x: -60, z: 60, maxHp: 6000, atk: 240, armor: 50, range: 14, atkCooldown: 1.2 });
+            createEntity({ name: 'DUSK CORE', type: 'core', team: 'red', x: 60, z: -60, maxHp: 6000, atk: 240, armor: 50, range: 14, atkCooldown: 1.2 });
+
+            // 2. Turrets (Top, Mid, Bottom for both teams)
+            const turretSpecs = [
+                // Blue Turrets
+                { name: 'Blue Top Turret', team: 'blue', x: -62, z: -15 },
+                { name: 'Blue Mid Turret', team: 'blue', x: -26, z: 26 },
+                { name: 'Blue Bot Turret', team: 'blue', x: 15, z: 62 },
+                // Red Turrets
+                { name: 'Red Top Turret', team: 'red', x: -15, z: -62 },
+                { name: 'Red Mid Turret', team: 'red', x: 26, z: -26 },
+                { name: 'Red Bot Turret', team: 'red', x: 62, z: 15 }
+            ];
+            turretSpecs.forEach(t => {
+                createEntity({ name: t.name, type: 'turret', team: t.team, x: t.x, z: t.z, maxHp: 2800, atk: 190, armor: 40, range: 13, atkCooldown: 1.3 });
+            });
+
+            // 3. Player Hero: KAEL (Blue Mid/Roam)
+            playerHero = createEntity({
+                name: 'KAEL (You)',
+                type: 'hero',
+                role: 'Tank',
+                team: 'blue',
+                isPlayer: true,
+                x: -48,
+                z: 48,
+                maxHp: 3500,
+                maxMana: 600,
+                atk: 125,
+                armor: 100,
+                speed: 9.5,
+                range: 3.6,
+                atkCooldown: 0.85
+            });
+
+            // 4. Allied Bots (4 Heroes for 5v5)
+            const blueBots = [
+                { name: 'Lyra (Mage)', role: 'Mage', x: -52, z: 42, wp: [new THREE.Vector3(-20, 0, 20), new THREE.Vector3(20, 0, -20), new THREE.Vector3(55, 0, -55)] },
+                { name: 'Vane (Fighter)', role: 'Fighter', x: -58, z: 32, wp: [new THREE.Vector3(-62, 0, -62), new THREE.Vector3(55, 0, -55)] },
+                { name: 'Aria (Marksman)', role: 'Marksman', x: -35, z: 58, wp: [new THREE.Vector3(62, 0, 62), new THREE.Vector3(55, 0, -55)] },
+                { name: 'Zedric (Assassin)', role: 'Assassin', x: -42, z: 38, wp: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(55, 0, -55)] }
+            ];
+            blueBots.forEach(b => {
+                createEntity({
+                    name: b.name, type: 'hero', role: b.role, team: 'blue', x: b.x, z: b.z,
+                    maxHp: 2200, atk: 135, armor: 45, speed: 7.5, range: 4.5, waypoints: b.wp
+                });
+            });
+
+            // 5. Enemy Bots (5 Heroes - Kingdom of Dusk)
+            const redBots = [
+                { name: 'Malakor (Warlord)', role: 'Tank', x: 48, z: -48, wp: [new THREE.Vector3(15, 0, -15), new THREE.Vector3(-20, 0, 20), new THREE.Vector3(-55, 0, 55)] },
+                { name: 'Vexana (Sorceress)', role: 'Mage', x: 52, z: -42, wp: [new THREE.Vector3(10, 0, -10), new THREE.Vector3(-55, 0, 55)] },
+                { name: 'Draven (Executioner)', role: 'Fighter', x: 35, z: -58, wp: [new THREE.Vector3(-62, 0, -62), new THREE.Vector3(-55, 0, 55)] },
