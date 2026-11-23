@@ -1,0 +1,30 @@
+name: Validate game and realtime server
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check realtime server syntax
+        run: node --check server/index.js
+      - name: Check inline browser JavaScript syntax
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const scripts = [...html.matchAll(/<script(?![^>]*src=)[^>]*>([\s\S]*?)<\/script>/gi)];
+          if (!scripts.length) throw new Error('No inline scripts found');
+          scripts.forEach((match, index) => {
+            new Function(match[1]);
+            console.log('Inline script', index + 1, 'syntax OK');
+          });
+          NODE
