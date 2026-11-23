@@ -2,34 +2,38 @@
 
 ## Current delivery
 
-The repository contains the existing standalone Three.js game prototype as `index.html`. Vite is included only as a convenient local development server and static build tool.
+The repository contains the standalone Three.js game in `index.html`, plus a Socket.IO Node.js realtime service in `server/`.
 
-## Implemented in the current prototype
+## Implemented
 
-- Three-dimensional Eternal Rift arena.
-- Player-controlled Kael hero and HUD.
-- Keyboard and mouse combat controls.
-- Skills, basic attacks, projectiles, visual effects, and synthesized audio.
-- Minimap, lane structures, minions, shop, and match-end interface.
+- Three-dimensional Eternal Rift arena, player-controlled Kael, HUD, skills, attacks, minions, structures, shop, and match UI.
+- Audio controls: master volume, music volume, SFX volume, mute, reset, and browser-local persistence.
+- Online party rooms for up to five players with create/join codes and player presence.
+- Player avatar position/rotation relay and remote avatar interpolation.
+- WebRTC signaling for peer-to-peer microphone and camera media.
+- Server health endpoint and CORS origin allow-list configuration.
 
-## Not implemented yet
+## Important multiplayer scope
 
-The current source is not a production online multiplayer MOBA. In particular, it does not yet include:
+This is an **online party / movement-sync MVP**, not yet a fully authoritative MOBA match. Combat simulation, HP, damage, cooldowns, minions, turrets, boss, objectives, and match results still run locally in each browser and are not shared server state. Room data is in memory and resets when the Node process restarts.
 
-- A 5v5 authoritative multiplayer server.
-- Matchmaking, lobby service, player sessions, or reconnect handling.
-- User authentication and persistent player profiles.
-- Server-side anti-cheat and authoritative combat validation.
-- Production ranking, inventory persistence, and telemetry.
+## Deployment
 
-## Validation
+- Static frontend: deploy repository root to Vercel as static HTML.
+- Realtime backend: deploy the `server/` directory as a persistent Node.js WebSocket service.
+- Set `ALLOWED_ORIGINS=https://legends-arena-green.vercel.app` on the backend.
+- Paste the backend HTTPS URL into the game's **URL server multiplayer** field.
 
-The inline JavaScript in the delivered HTML was extracted and passed Node.js syntax validation (`node --check`). This check does not replace browser-based gameplay, mobile-device, performance, or security testing.
+See [../server/README.md](../server/README.md).
 
-## Suggested next milestones
+## Validation status
 
-1. Split the standalone HTML into maintainable modules and migrate to TypeScript.
-2. Define authoritative match state and network protocol.
-3. Implement server-side simulation and multiplayer synchronization.
-4. Add authentication, persistence, matchmaking, and reconnect flows.
-5. Add automated tests and browser/device QA before public release.
+The repository update includes source-level implementation and deployment instructions. A live multiplayer session has not yet been verified because the realtime backend still needs to be deployed and configured. Browser/device testing is still required.
+
+## Next milestones
+
+1. Make combat and all match entities server-authoritative.
+2. Add reconnect/resume and room cleanup.
+3. Add TURN relay for restrictive NAT/firewall networks.
+4. Add authentication, persistent profiles, matchmaking, and anti-cheat.
+5. Add automated browser/device and load testing.
