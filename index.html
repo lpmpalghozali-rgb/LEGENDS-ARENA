@@ -998,3 +998,977 @@
                 { name: 'Malakor (Warlord)', role: 'Tank', x: 48, z: -48, wp: [new THREE.Vector3(15, 0, -15), new THREE.Vector3(-20, 0, 20), new THREE.Vector3(-55, 0, 55)] },
                 { name: 'Vexana (Sorceress)', role: 'Mage', x: 52, z: -42, wp: [new THREE.Vector3(10, 0, -10), new THREE.Vector3(-55, 0, 55)] },
                 { name: 'Draven (Executioner)', role: 'Fighter', x: 35, z: -58, wp: [new THREE.Vector3(-62, 0, -62), new THREE.Vector3(-55, 0, 55)] },
+                { name: 'Sylas (Shadow)', role: 'Assassin', x: 58, z: -32, wp: [new THREE.Vector3(62, 0, 62), new THREE.Vector3(-55, 0, 55)] },
+                { name: 'Nyx (Ranger)', role: 'Marksman', x: 44, z: -52, wp: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-55, 0, 55)] }
+            ];
+            redBots.forEach(b => {
+                createEntity({
+                    name: b.name, type: 'hero', role: b.role, team: 'red', x: b.x, z: b.z,
+                    maxHp: 2150, atk: 130, armor: 40, speed: 7.2, range: 4.5, waypoints: b.wp
+                });
+            });
+
+            // 6. Epic Objective Monster: Aether Guardian (in River Pit)
+            spawnAetherGuardian();
+
+            // 7. Initial Minion Wave
+            spawnMinionWave();
+        }
+
+        function spawnAetherGuardian() {
+            const existing = entities.find(e => e.type === 'boss' && !e.dead);
+            if (existing) return;
+            createEntity({
+                name: 'AETHER GUARDIAN (BOSS)',
+                type: 'boss',
+                team: 'neutral',
+                x: -24,
+                z: -24,
+                maxHp: 4500,
+                atk: 160,
+                armor: 60,
+                speed: 0,
+                range: 5.5,
+                atkCooldown: 1.4
+            });
+        }
+
+        function spawnMinionWave() {
+            const lanes = [
+                {
+                    blueStart: [-62, 42],
+                    blueWp: [new THREE.Vector3(-62, 0, -62), new THREE.Vector3(58, 0, -58)],
+                    redStart: [42, -62],
+                    redWp: [new THREE.Vector3(-62, 0, -62), new THREE.Vector3(-58, 0, 58)]
+                },
+                {
+                    blueStart: [-45, 45],
+                    blueWp: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(58, 0, -58)],
+                    redStart: [45, -45],
+                    redWp: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-58, 0, 58)]
+                },
+                {
+                    blueStart: [-42, 62],
+                    blueWp: [new THREE.Vector3(62, 0, 62), new THREE.Vector3(58, 0, -58)],
+                    redStart: [62, -42],
+                    redWp: [new THREE.Vector3(62, 0, 62), new THREE.Vector3(-58, 0, 58)]
+                }
+            ];
+
+            lanes.forEach((lane, idx) => {
+                for (let i = 0; i < 2; i++) {
+                    const offset = i * 3;
+                    createEntity({
+                        name: 'Dawn Minion', type: 'minion', team: 'blue',
+                        x: lane.blueStart[0] + offset, z: lane.blueStart[1] - offset,
+                        maxHp: 480, atk: 42, armor: 10, speed: 6.2, range: 3.0, waypoints: lane.blueWp
+                    });
+                    createEntity({
+                        name: 'Dusk Minion', type: 'minion', team: 'red',
+                        x: lane.redStart[0] - offset, z: lane.redStart[1] + offset,
+                        maxHp: 480, atk: 42, armor: 10, speed: 6.2, range: 3.0, waypoints: lane.redWp
+                    });
+                }
+            });
+        }
+
+        // ==========================================
+        // 6. INPUT HANDLING (PC MOUSE & KEYBOARD MOBA CONTROLS)
+        // ==========================================
+        const keys = {};
+        const raycaster = new THREE.Raycaster();
+        const mouseNDC = new THREE.Vector2();
+        const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        let moveDestination = null;
+        let moveMarkerMesh = null;
+
+        function createMoveMarker() {
+            const geo = new THREE.RingGeometry(0.4, 0.75, 24);
+            const mat = new THREE.MeshBasicMaterial({ color: 0x34d399, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+            moveMarkerMesh = new THREE.Mesh(geo, mat);
+            moveMarkerMesh.rotation.x = -Math.PI / 2;
+            moveMarkerMesh.position.y = 0.16;
+            moveMarkerMesh.visible = false;
+            scene.add(moveMarkerMesh);
+        }
+
+        // Disable browser right-click context menu on canvas
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        function handleCanvasPointer(clientX, clientY, isRightClick) {
+            if (!gameState.started || gameState.ended || !playerHero || playerHero.dead) return;
+
+            mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
+            mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouseNDC, camera);
+
+            // 1. Cek apakah kursor mengklik salah satu musuh 3D
+            let clickedEnemy = null;
+            let closestScreenDist = 4.2;
+            const clickPoint = new THREE.Vector3();
+            raycaster.ray.intersectPlane(groundPlane, clickPoint);
+
+            if (clickPoint) {
+                for (const ent of entities) {
+                    if (ent.dead || ent.team === 'blue') continue;
+                    const distToClick = clickPoint.distanceTo(ent.mesh.position);
+                    const hitRadius = ent.type === 'core' ? 4.5 : (ent.type === 'turret' ? 3.2 : 2.5);
+                    if (distToClick <= hitRadius && distToClick < closestScreenDist) {
+                        closestScreenDist = distToClick;
+                        clickedEnemy = ent;
+                    }
+                }
+            }
+
+            if (clickedEnemy) {
+                // Kunci & serang musuh yang diklik!
+                lockedTarget = clickedEnemy;
+                moveDestination = null;
+                if (moveMarkerMesh) moveMarkerMesh.visible = false;
+                if (isRightClick) {
+                    triggerBasicAttack();
+                }
+                return;
+            }
+
+            // 2. Jika Klik Kanan di tanah kosong: Gerak menuju titik tersebut (Move-Click)
+            if (isRightClick && clickPoint) {
+                lockedTarget = null;
+                const destX = THREE.MathUtils.clamp(clickPoint.x, -HALF_MAP + 3, HALF_MAP - 3);
+                const destZ = THREE.MathUtils.clamp(clickPoint.z, -HALF_MAP + 3, HALF_MAP - 3);
+                moveDestination = new THREE.Vector3(destX, 0, destZ);
+
+                if (!moveMarkerMesh) createMoveMarker();
+                moveMarkerMesh.position.set(destX, 0.16, destZ);
+                moveMarkerMesh.visible = true;
+                moveMarkerMesh.scale.set(1.3, 1.3, 1);
+            }
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) {
+                handleCanvasPointer(e.clientX, e.clientY, true);
+            } else if (e.button === 0) {
+                handleCanvasPointer(e.clientX, e.clientY, false);
+            }
+        });
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (!gameState.started || gameState.ended) return;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                preferredTargetType = 'any';
+                triggerBasicAttack();
+            }
+            if (e.code === 'KeyM') triggerTargetedAttack('minion');
+            if (e.code === 'KeyT') triggerTargetedAttack('turret');
+            if (e.code === 'KeyQ') castSkill(1);
+            if (e.code === 'KeyE') castSkill(2);
+            if (e.code === 'KeyR') castSkill(3);
+            if (e.code === 'KeyF') castSkill(4);
+            if (e.code === 'KeyB') castRecall();
+            if (e.code === 'KeyP') toggleShop();
+        });
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Hold-to-Attack Button Events
+        const btnAttack = document.getElementById('btn-attack');
+        btnAttack.addEventListener('mousedown', () => {
+            isHoldingAttack = true;
+            preferredTargetType = 'any';
+            triggerBasicAttack();
+        });
+        window.addEventListener('mouseup', () => { isHoldingAttack = false; });
+
+        // ==========================================
+        // 7. COMBAT, SKILLS & VFX SYSTEM
+        // ==========================================
+        const skillCooldowns = { 1: 0, 2: 0, 3: 0, 4: 0 };
+        const skillMaxCD = { 1: 5, 2: 7, 3: 8, 4: 20 };
+        const skillManaCost = { 1: 50, 2: 65, 3: 75, 4: 120 };
+
+        function spawnVisualRing(pos, radius, color, duration = 0.5) {
+            const geo = new THREE.RingGeometry(0.3, radius, 32);
+            const mat = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.x = -Math.PI / 2;
+            mesh.position.set(pos.x, 0.25, pos.z);
+            scene.add(mesh);
+            vfxList.push({ mesh, life: duration, maxLife: duration, grow: true });
+        }
+
+        function spawnProjectile(fromEntity, targetEntity, color, damage) {
+            const geo = new THREE.SphereGeometry(0.45, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.copy(fromEntity.mesh.position).add(new THREE.Vector3(0, 2.5, 0));
+            scene.add(mesh);
+            projectiles.push({ mesh, from: fromEntity, target: targetEntity, speed: 24, damage });
+        }
+
+        function showFloatingText(worldPos, text, color = '#ffffff') {
+            const vec = worldPos.clone().add(new THREE.Vector3(0, 3.5, 0));
+            vec.project(camera);
+
+            const x = (vec.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-(vec.y * 0.5) + 0.5) * window.innerHeight;
+
+            if (x < 0 || x > window.innerWidth || y < 0 || y > window.innerHeight) return;
+
+            const el = document.createElement('div');
+            el.className = 'dmg-text text-sm sm:text-base';
+            el.style.left = `${x}px`;
+            el.style.top = `${y}px`;
+            el.style.color = color;
+            el.innerText = text;
+            document.getElementById('floating-texts').appendChild(el);
+            setTimeout(() => el.remove(), 900);
+        }
+
+        function dealDamage(attacker, target, rawDamage, isSkill = false) {
+            if (!target || target.dead) return;
+
+            // Armor mitigation formula: Damage * (100 / (100 + Armor))
+            const mitigation = 100 / (100 + target.armor);
+            let finalDmg = Math.max(10, Math.round(rawDamage * mitigation));
+
+            // Shield absorption
+            if (target.shieldAmount > 0) {
+                const absorbed = Math.min(target.shieldAmount, finalDmg);
+                target.shieldAmount -= absorbed;
+                finalDmg -= absorbed;
+                if (absorbed > 0) {
+                    showFloatingText(target.mesh.position, `-${absorbed} (Shield)`, '#38bdf8');
+                }
+            }
+
+            if (finalDmg > 0) {
+                target.hp = Math.max(0, target.hp - finalDmg);
+                showFloatingText(target.mesh.position, `-${finalDmg}`, isSkill ? '#fbbf24' : '#f87171');
+            }
+
+            // Passive Kael: Guardian Soul (Trigger shield when HP < 35%)
+            if (target.isPlayer && target.hp > 0 && target.hp / target.maxHp < 0.35 && !target.passiveUsed) {
+                target.passiveUsed = true;
+                target.shieldAmount += 650;
+                showFloatingText(target.mesh.position, "GUARDIAN SOUL SHIELD!", "#38bdf8");
+                document.getElementById('passive-badge').classList.remove('hidden');
+                setTimeout(() => {
+                    target.passiveUsed = false;
+                    document.getElementById('passive-badge').classList.add('hidden');
+                }, 15000);
+            }
+
+            updateHealthBarSprite(target);
+
+            if (target.hp <= 0 && !target.dead) {
+                handleEntityDeath(attacker, target);
+            }
+        }
+
+        function handleEntityDeath(killer, victim) {
+            victim.dead = true;
+            victim.mesh.visible = false;
+
+            // Reward killer if player or ally
+            if (killer && killer.isPlayer) {
+                const goldGain = victim.type === 'hero' ? 300 : (victim.type === 'boss' ? 500 : (victim.type === 'turret' ? 250 : 45));
+                const xpGain = victim.type === 'hero' ? 250 : (victim.type === 'boss' ? 400 : 60);
+                playerHero.gold += goldGain;
+                gainPlayerXP(xpGain);
+                showFloatingText(victim.mesh.position, `+${goldGain}G`, '#facc15');
+            }
+
+            if (victim.type === 'hero') {
+                victim.deaths++;
+                victim.respawnTimer = 6;
+                if (victim.team === 'blue') gameState.redKills++;
+                else gameState.blueKills++;
+
+                if (killer && killer.type === 'hero') killer.kills++;
+
+                playSound('kill');
+                showAnnouncement(`${killer ? killer.name : 'Minion'} mengeliminasi ${victim.name}!`);
+
+                if (victim.isPlayer) {
+                    document.getElementById('respawn-overlay').classList.remove('hidden');
+                }
+            } else if (victim.type === 'boss') {
+                showAnnouncement(`${killer ? killer.name : 'Tim'} menaklukkan Aether Guardian!`);
+                entities.forEach(e => {
+                    if (!e.dead && killer && e.team === killer.team && e.type === 'hero') {
+                        e.shieldAmount += 800;
+                        e.atk += 25;
+                    }
+                });
+                setTimeout(spawnAetherGuardian, 45000);
+            } else if (victim.type === 'turret') {
+                showAnnouncement(`${victim.name} telah dihancurkan!`);
+            } else if (victim.type === 'core') {
+                endMatch(victim.team === 'red');
+            }
+        }
+
+        function gainPlayerXP(amount) {
+            playerHero.xp += amount;
+            const req = playerHero.level * 150;
+            if (playerHero.xp >= req && playerHero.level < 15) {
+                playerHero.xp -= req;
+                playerHero.level++;
+                playerHero.maxHp += 220;
+                playerHero.hp = Math.min(playerHero.maxHp, playerHero.hp + 300);
+                playerHero.maxMana += 50;
+                playerHero.mana = playerHero.maxMana;
+                playerHero.atk += 16;
+                playerHero.armor += 8;
+                updateHealthBarSprite(playerHero);
+                showFloatingText(playerHero.mesh.position, `LEVEL UP! (Lv.${playerHero.level})`, '#38bdf8');
+            }
+        }
+
+        function findNearestEnemy(source, maxRange, filterType = 'any') {
+            let nearest = null;
+            let bestDist = maxRange;
+            for (const ent of entities) {
+                if (ent.dead || ent.team === source.team) continue;
+
+                if (filterType === 'minion' && ent.type !== 'minion' && ent.type !== 'boss') continue;
+                if (filterType === 'turret' && ent.type !== 'turret' && ent.type !== 'core') continue;
+
+                const d = source.mesh.position.distanceTo(ent.mesh.position);
+                if (d <= bestDist) {
+                    bestDist = d;
+                    nearest = ent;
+                }
+            }
+            return nearest;
+        }
+
+        function triggerTargetedAttack(targetCategory) {
+            preferredTargetType = targetCategory;
+            triggerBasicAttack();
+        }
+
+        function triggerBasicAttack() {
+            if (!playerHero || playerHero.dead) return;
+
+            // Cari target sesuai kategori tombol (atau prioritaskan Hero musuh jika tombol Attack utama ditekan)
+            let target = null;
+            if (preferredTargetType === 'any') {
+                // Cek Hero musuh dulu dalam radius 11 unit, jika tidak ada cari musuh terdekat apa saja
+                target = entities.find(e => !e.dead && e.team !== 'blue' && e.type === 'hero' && playerHero.mesh.position.distanceTo(e.mesh.position) <= 11);
+                if (!target) target = findNearestEnemy(playerHero, 12, 'any');
+            } else {
+                target = findNearestEnemy(playerHero, 14, preferredTargetType);
+                if (!target) {
+                    showFloatingText(playerHero.mesh.position, `Tidak ada ${preferredTargetType.toUpperCase()} di dekatmu!`, "#94a3b8");
+                    return;
+                }
+            }
+
+            if (!target) {
+                // Tetap ayunkan pedang meski kosong agar tombol terasa responsif
+                if (playerHero.mesh.userData.animParts && playerHero.mesh.userData.animParts.attackAnimTimer <= 0) {
+                    playerHero.mesh.userData.animParts.attackAnimTimer = 0.3;
+                    playSound('attack');
+                }
+                return;
+            }
+
+            lockedTarget = target;
+            const dist = playerHero.mesh.position.distanceTo(target.mesh.position);
+
+            // Jika musuh berada di luar jangkauan pedang, kejar otomatis!
+            if (dist > playerHero.range + 1.2) {
+                return;
+            }
+
+            const now = gameState.time;
+            if (now - playerHero.lastAtkTime < playerHero.atkCooldown) return;
+
+            playerHero.lastAtkTime = now;
+            if (playerHero.mesh.userData.animParts) {
+                playerHero.mesh.userData.animParts.attackAnimTimer = 0.35;
+            }
+            // Face target
+            playerHero.mesh.lookAt(target.mesh.position.x, 0, target.mesh.position.z);
+            playSound('attack');
+            spawnVisualRing(target.mesh.position, 1.8, 0x38bdf8, 0.25);
+            dealDamage(playerHero, target, playerHero.atk, false);
+        }
+
+        function castSkill(skillNum) {
+            if (!playerHero || playerHero.dead) return;
+            if (skillCooldowns[skillNum] > 0) return;
+
+            const cost = skillManaCost[skillNum];
+            if (playerHero.mana < cost) {
+                showFloatingText(playerHero.mesh.position, "Mana Tidak Cukup!", "#60a5fa");
+                return;
+            }
+
+            playerHero.mana -= cost;
+            skillCooldowns[skillNum] = skillMaxCD[skillNum];
+
+            const pos = playerHero.mesh.position;
+
+            if (skillNum === 1) {
+                // Skill 1: Shield Bash (AoE Damage + Stun)
+                playSound('skill');
+                spawnVisualRing(pos, 5.5, 0x38bdf8, 0.45);
+                entities.forEach(ent => {
+                    if (!ent.dead && ent.team !== 'blue' && pos.distanceTo(ent.mesh.position) <= 5.5) {
+                        dealDamage(playerHero, ent, playerHero.atk * 1.6 + 80, true);
+                        ent.stunTimer = 1.5;
+                        showFloatingText(ent.mesh.position, "STUNNED!", "#fde047");
+                    }
+                });
+            } else if (skillNum === 2) {
+                // Skill 2: Aether Wall (Self Shield + Armor Boost)
+                playSound('skill');
+                playerHero.shieldAmount += 550;
+                spawnVisualRing(pos, 3.2, 0x22d3ee, 0.7);
+                showFloatingText(pos, "+550 AETHER SHIELD", "#22d3ee");
+            } else if (skillNum === 3) {
+                // Skill 3: Guardian Charge (Dash forward + Knockback damage)
+                playSound('skill');
+                const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(playerHero.mesh.quaternion);
+                const targetPos = pos.clone().addScaledVector(dir, 8);
+                targetPos.x = THREE.MathUtils.clamp(targetPos.x, -HALF_MAP + 4, HALF_MAP - 4);
+                targetPos.z = THREE.MathUtils.clamp(targetPos.z, -HALF_MAP + 4, HALF_MAP - 4);
+                pos.copy(targetPos);
+                spawnVisualRing(pos, 4.5, 0x818cf8, 0.4);
+
+                entities.forEach(ent => {
+                    if (!ent.dead && ent.team !== 'blue' && pos.distanceTo(ent.mesh.position) <= 4.5) {
+                        dealDamage(playerHero, ent, playerHero.atk * 1.4 + 60, true);
+                    }
+                });
+            } else if (skillNum === 4) {
+                // Ultimate: Eternal Fortress (Massive AoE Damage + Team Shield & Heal)
+                playSound('ult');
+                spawnVisualRing(pos, 10, 0xf59e0b, 0.9);
+                showAnnouncement("KAEL mengaktifkan ETERNAL FORTRESS!");
+
+                entities.forEach(ent => {
+                    if (ent.dead) return;
+                    const d = pos.distanceTo(ent.mesh.position);
+                    if (d <= 10) {
+                        if (ent.team === 'blue') {
+                            ent.shieldAmount += 700;
+                            ent.hp = Math.min(ent.maxHp, ent.hp + 400);
+                            updateHealthBarSprite(ent);
+                            showFloatingText(ent.mesh.position, "FORTRESS AEGIS!", "#fbbf24");
+                        } else {
+                            dealDamage(playerHero, ent, playerHero.atk * 2.4 + 180, true);
+                            ent.stunTimer = 1.2;
+                        }
+                    }
+                });
+            }
+        }
+
+        function castRecall() {
+            if (!playerHero || playerHero.dead) return;
+            playSound('skill');
+            spawnVisualRing(playerHero.mesh.position, 3, 0x38bdf8, 0.6);
+            playerHero.mesh.position.copy(playerHero.spawnPos);
+            playerHero.hp = playerHero.maxHp;
+            playerHero.mana = playerHero.maxMana;
+            updateHealthBarSprite(playerHero);
+            showFloatingText(playerHero.mesh.position, "RECALLED & HEALED", "#34d399");
+        }
+
+        // ==========================================
+        // 8. EQUIPMENT SHOP LOGIC
+        // ==========================================
+        function toggleShop() {
+            const modal = document.getElementById('shop-modal');
+            modal.classList.toggle('hidden');
+            if (!modal.classList.contains('hidden')) {
+                renderShop();
+            }
+        }
+
+        function renderShop() {
+            document.getElementById('shop-gold').innerText = Math.floor(playerHero.gold);
+            document.getElementById('equipped-count').innerText = `${playerHero.items.length}/6`;
+            const grid = document.getElementById('shop-items-grid');
+            grid.innerHTML = '';
+
+            SHOP_ITEMS.forEach(item => {
+                const owned = playerHero.items.includes(item.id);
+                const canAfford = playerHero.gold >= item.cost && !owned && playerHero.items.length < 6;
+
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-xl border ${owned ? 'bg-emerald-950/30 border-emerald-500/50' : 'bg-slate-800/80 border-slate-700'} flex items-center justify-between gap-2`;
+                card.innerHTML = `
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-lg bg-slate-900 flex items-center justify-center border border-slate-700">
+                            <i class="fa-solid ${item.icon} ${item.color} text-base"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-white">${item.name}</div>
+                            <div class="text-[10px] text-slate-400">${item.desc}</div>
+                        </div>
+                    </div>
+                    <button onclick="buyItem('${item.id}')" ${!canAfford ? 'disabled' : ''}
+                        class="px-2.5 py-1.5 rounded-lg text-[11px] font-extrabold transition ${
+                            owned ? 'bg-emerald-600/30 text-emerald-300 cursor-default' :
+                            canAfford ? 'bg-amber-500 hover:bg-amber-400 text-slate-950' : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        }">
+                        ${owned ? 'DIMILIKI' : item.cost + 'G'}
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function buyItem(itemId) {
+            const item = SHOP_ITEMS.find(i => i.id === itemId);
+            if (!item || playerHero.gold < item.cost || playerHero.items.includes(itemId)) return;
+
+            playerHero.gold -= item.cost;
+            playerHero.items.push(itemId);
+
+            if (item.stat.speed) playerHero.speed += item.stat.speed;
+            if (item.stat.maxHp) { playerHero.maxHp += item.stat.maxHp; playerHero.hp += item.stat.maxHp; }
+            if (item.stat.armor) playerHero.armor += item.stat.armor;
+            if (item.stat.atk) playerHero.atk += item.stat.atk;
+
+            playSound('buy');
+            updateHealthBarSprite(playerHero);
+            renderShop();
+        }
+
+        // ==========================================
+        // 9. AI, MOVEMENT & SIMULATION UPDATE
+        // ==========================================
+        function updateEntities(dt) {
+            // Player Movement (WASD / Arrow / Right-Click Move / Auto-Chase Target)
+            let playerMoving = false;
+            if (playerHero && !playerHero.dead) {
+                let moveX = 0;
+                let moveZ = 0;
+
+                if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
+                if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
+                if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+                if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+
+                const keyDir = new THREE.Vector3(moveX, 0, moveZ);
+                if (keyDir.lengthSq() > 0.01) {
+                    // Keyboard WASD/Arrow membatalkan tujuan klik-kanan
+                    moveDestination = null;
+                    if (moveMarkerMesh) moveMarkerMesh.visible = false;
+
+                    playerMoving = true;
+                    keyDir.normalize();
+                    playerHero.mesh.position.addScaledVector(keyDir, playerHero.speed * dt);
+                    playerHero.mesh.position.x = THREE.MathUtils.clamp(playerHero.mesh.position.x, -HALF_MAP + 3, HALF_MAP - 3);
+                    playerHero.mesh.position.z = THREE.MathUtils.clamp(playerHero.mesh.position.z, -HALF_MAP + 3, HALF_MAP - 3);
+
+                    playerHero.mesh.rotation.y = Math.atan2(keyDir.x, keyDir.z);
+                } else if (moveDestination) {
+                    // Bergerak menuju titik Klik Kanan di tanah
+                    const toDest = new THREE.Vector3().subVectors(moveDestination, playerHero.mesh.position);
+                    toDest.y = 0;
+                    const dist = toDest.length();
+
+                    if (dist > 0.35) {
+                        playerMoving = true;
+                        toDest.normalize();
+                        playerHero.mesh.position.addScaledVector(toDest, playerHero.speed * dt);
+                        playerHero.mesh.rotation.y = Math.atan2(toDest.x, toDest.z);
+
+                        if (moveMarkerMesh) {
+                            moveMarkerMesh.scale.lerp(new THREE.Vector3(0.85, 0.85, 1), 0.15);
+                        }
+                    } else {
+                        moveDestination = null;
+                        if (moveMarkerMesh) moveMarkerMesh.visible = false;
+                    }
+                } else if (lockedTarget && !lockedTarget.dead) {
+                    // Auto-chase jika sedang mengunci target musuh
+                    const distToTarget = playerHero.mesh.position.distanceTo(lockedTarget.mesh.position);
+                    if (distToTarget > playerHero.range + 0.8 && distToTarget < 18) {
+                        playerMoving = true;
+                        const chaseDir = new THREE.Vector3().subVectors(lockedTarget.mesh.position, playerHero.mesh.position).normalize();
+                        playerHero.mesh.position.addScaledVector(chaseDir, playerHero.speed * dt);
+                        playerHero.mesh.lookAt(lockedTarget.mesh.position.x, 0, lockedTarget.mesh.position.z);
+                    } else if (distToTarget <= playerHero.range + 1.2) {
+                        triggerBasicAttack();
+                    } else {
+                        lockedTarget = null;
+                    }
+                }
+
+                // Jika tombol ATTACK ditahan (hold), terus serang
+                if (isHoldingAttack) {
+                    triggerBasicAttack();
+                }
+
+                // Update Cincin Indikator Target di tanah
+                if (targetIndicatorMesh) {
+                    if (lockedTarget && !lockedTarget.dead) {
+                        targetIndicatorMesh.visible = true;
+                        targetIndicatorMesh.position.set(lockedTarget.mesh.position.x, 0.14, lockedTarget.mesh.position.z);
+                        targetIndicatorMesh.rotation.z += dt * 3;
+                    } else {
+                        targetIndicatorMesh.visible = false;
+                        lockedTarget = null;
+                    }
+                }
+            }
+
+            // Update All Entities (AI, Respawn, Turrets, Humanoid Animations)
+            for (let i = entities.length - 1; i >= 0; i--) {
+                const ent = entities[i];
+
+                // Rotate crystals on turrets/cores
+                if (ent.mesh.userData.crystal) {
+                    ent.mesh.userData.crystal.rotation.y += dt * 1.8;
+                }
+
+                // Handle Dead State & Hero Respawn
+                if (ent.dead) {
+                    if (ent.type === 'hero') {
+                        ent.respawnTimer -= dt;
+                        if (ent.isPlayer) {
+                            document.getElementById('respawn-timer').innerText = Math.max(1, Math.ceil(ent.respawnTimer));
+                        }
+                        if (ent.respawnTimer <= 0) {
+                            ent.dead = false;
+                            ent.hp = ent.maxHp;
+                            ent.mana = ent.maxMana;
+                            ent.mesh.position.copy(ent.spawnPos);
+                            ent.mesh.visible = true;
+                            updateHealthBarSprite(ent);
+                            if (ent.isPlayer) {
+                                document.getElementById('respawn-overlay').classList.add('hidden');
+                            }
+                        }
+                    } else if (ent.type === 'minion') {
+                        scene.remove(ent.mesh);
+                        entities.splice(i, 1);
+                    }
+                    continue;
+                }
+
+                // Stun check
+                if (ent.stunTimer > 0) {
+                    ent.stunTimer -= dt;
+                    continue;
+                }
+
+                let isMoving = ent.isPlayer ? playerMoving : false;
+
+                if (!ent.isPlayer) {
+                    // AI Combat & Movement Logic
+                    const aggroRange = (ent.type === 'turret' || ent.type === 'core') ? ent.range : (ent.type === 'boss' ? 8 : 14);
+                    const target = findNearestEnemy(ent, aggroRange);
+
+                    if (target) {
+                        const dist = ent.mesh.position.distanceTo(target.mesh.position);
+                        if (dist <= ent.range) {
+                            // Attack target
+                            if (gameState.time - ent.lastAtkTime >= ent.atkCooldown) {
+                                ent.lastAtkTime = gameState.time;
+                                if (ent.mesh.userData.animParts) {
+                                    ent.mesh.userData.animParts.attackAnimTimer = 0.35;
+                                }
+                                if (ent.type === 'turret' || ent.type === 'core' || ent.range > 5) {
+                                    spawnProjectile(ent, target, ent.team === 'blue' ? 0x38bdf8 : 0xf43f5e, ent.atk);
+                                } else {
+                                    ent.mesh.lookAt(target.mesh.position.x, 0, target.mesh.position.z);
+                                    dealDamage(ent, target, ent.atk, false);
+                                }
+                            }
+                        } else if (ent.speed > 0) {
+                            // Move toward target
+                            isMoving = true;
+                            const moveDir = new THREE.Vector3().subVectors(target.mesh.position, ent.mesh.position).normalize();
+                            ent.mesh.position.addScaledVector(moveDir, ent.speed * dt);
+                            ent.mesh.lookAt(target.mesh.position.x, 0, target.mesh.position.z);
+                        }
+                    } else if (ent.speed > 0 && ent.waypoints.length > 0) {
+                        // Follow Lane Waypoints
+                        const wp = ent.waypoints[ent.waypointIndex];
+                        if (wp) {
+                            const distWp = ent.mesh.position.distanceTo(wp);
+                            if (distWp < 2.5) {
+                                if (ent.waypointIndex < ent.waypoints.length - 1) ent.waypointIndex++;
+                            } else {
+                                isMoving = true;
+                                const moveDir = new THREE.Vector3().subVectors(wp, ent.mesh.position).normalize();
+                                ent.mesh.position.addScaledVector(moveDir, ent.speed * dt);
+                                ent.mesh.lookAt(wp.x, 0, wp.z);
+                            }
+                        }
+                    }
+                }
+
+                // Animasi Karakter Humanoid 3D (Berjalan, Bernapas, & Ayunan Senjata)
+                const anim = ent.mesh.userData.animParts;
+                if (anim) {
+                    if (isMoving) {
+                        anim.walkPhase += dt * 11;
+                        const swing = Math.sin(anim.walkPhase) * 0.65;
+                        anim.leftLegPivot.rotation.x = swing;
+                        anim.rightLegPivot.rotation.x = -swing;
+                        anim.leftArmPivot.rotation.x = -swing * 0.6;
+                        if (anim.attackAnimTimer <= 0) {
+                            anim.rightArmPivot.rotation.x = swing * 0.6;
+                        }
+                        anim.rig.position.y = Math.abs(Math.cos(anim.walkPhase)) * 0.12;
+                    } else {
+                        // Posisi diam (Idle breathing)
+                        anim.leftLegPivot.rotation.x *= 0.8;
+                        anim.rightLegPivot.rotation.x *= 0.8;
+                        anim.leftArmPivot.rotation.x *= 0.8;
+                        anim.rig.position.y = Math.sin(gameState.time * 3 + anim.walkPhase) * 0.04;
+                    }
+
+                    // Animasi Ayunan Serangan Senjata
+                    if (anim.attackAnimTimer > 0) {
+                        anim.attackAnimTimer -= dt;
+                        const progress = 1 - (anim.attackAnimTimer / 0.35);
+                        anim.rightArmPivot.rotation.x = -Math.sin(progress * Math.PI) * 1.9;
+                    } else if (!isMoving) {
+                        anim.rightArmPivot.rotation.x *= 0.8;
+                    }
+                }
+            }
+
+            // Update Projectiles
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                if (!p.target || p.target.dead) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                    continue;
+                }
+                const targetPos = p.target.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+                const dir = new THREE.Vector3().subVectors(targetPos, p.mesh.position);
+                const step = p.speed * dt;
+                if (dir.length() <= step) {
+                    dealDamage(p.from, p.target, p.damage, false);
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                } else {
+                    dir.normalize();
+                    p.mesh.position.addScaledVector(dir, step);
+                }
+            }
+
+            // Update VFX Rings
+            for (let i = vfxList.length - 1; i >= 0; i--) {
+                const v = vfxList[i];
+                v.life -= dt;
+                if (v.life <= 0) {
+                    scene.remove(v.mesh);
+                    vfxList.splice(i, 1);
+                } else {
+                    const progress = 1 - (v.life / v.maxLife);
+                    v.mesh.material.opacity = (1 - progress) * 0.85;
+                    if (v.grow) {
+                        const s = 0.5 + progress * 0.6;
+                        v.mesh.scale.set(s, s, 1);
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 10. CAMERA & MINIMAP RENDERING
+        // ==========================================
+        function toggleCameraMode() {
+            gameState.cameraMode = gameState.cameraMode === 'follow' ? 'overview' : 'follow';
+        }
+
+        function updateCamera() {
+            if (!playerHero) return;
+            if (gameState.cameraMode === 'follow') {
+                const targetCamPos = new THREE.Vector3(
+                    playerHero.mesh.position.x,
+                    34,
+                    playerHero.mesh.position.z + 32
+                );
+                camera.position.lerp(targetCamPos, 0.1);
+                camera.lookAt(playerHero.mesh.position.x, 0, playerHero.mesh.position.z - 2);
+            } else {
+                camera.position.lerp(new THREE.Vector3(0, 115, 85), 0.08);
+                camera.lookAt(0, 0, 0);
+            }
+        }
+
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const miniCtx = minimapCanvas.getContext('2d');
+
+        function renderMinimap() {
+            const w = minimapCanvas.width;
+            const h = minimapCanvas.height;
+            miniCtx.fillStyle = '#0f172a';
+            miniCtx.fillRect(0, 0, w, h);
+
+            // Draw Lanes
+            miniCtx.strokeStyle = '#334155';
+            miniCtx.lineWidth = 6;
+            miniCtx.beginPath();
+            // Top & Bot
+            miniCtx.strokeRect(14, 14, w - 28, h - 28);
+            // Mid
+            miniCtx.moveTo(14, h - 14);
+            miniCtx.lineTo(w - 14, 14);
+            miniCtx.stroke();
+
+            // Draw River
+            miniCtx.strokeStyle = 'rgba(2, 132, 199, 0.5)';
+            miniCtx.lineWidth = 5;
+            miniCtx.beginPath();
+            miniCtx.moveTo(14, 14);
+            miniCtx.lineTo(w - 14, h - 14);
+            miniCtx.stroke();
+
+            // Draw Entities
+            entities.forEach(ent => {
+                if (ent.dead) return;
+                const mx = ((ent.mesh.position.x + HALF_MAP) / MAP_SIZE) * w;
+                const my = ((ent.mesh.position.z + HALF_MAP) / MAP_SIZE) * h;
+
+                miniCtx.beginPath();
+                const r = ent.type === 'core' ? 5 : (ent.type === 'turret' ? 3.5 : (ent.type === 'hero' || ent.type === 'boss' ? 4 : 2));
+                miniCtx.arc(mx, my, r, 0, Math.PI * 2);
+
+                if (ent.isPlayer) miniCtx.fillStyle = '#34d399';
+                else if (ent.team === 'blue') miniCtx.fillStyle = '#38bdf8';
+                else if (ent.team === 'neutral') miniCtx.fillStyle = '#c084fc';
+                else miniCtx.fillStyle = '#f43f5e';
+
+                miniCtx.fill();
+                if (ent.isPlayer) {
+                    miniCtx.strokeStyle = '#ffffff';
+                    miniCtx.lineWidth = 1.5;
+                    miniCtx.stroke();
+                }
+            });
+        }
+
+        // ==========================================
+        // 11. UI UPDATES & MATCH FLOW
+        // ==========================================
+        function updateHUD() {
+            if (!playerHero) return;
+            document.getElementById('hud-level').innerText = playerHero.level;
+            document.getElementById('hud-kda').innerText = `${playerHero.kills}/${playerHero.deaths}/${playerHero.assists}`;
+            document.getElementById('hud-gold').innerText = Math.floor(playerHero.gold);
+
+            const hpPct = Math.max(0, (playerHero.hp / playerHero.maxHp) * 100);
+            document.getElementById('hud-hp-bar').style.width = `${hpPct}%`;
+            document.getElementById('hud-hp-text').innerText = `${Math.ceil(playerHero.hp)} / ${playerHero.maxHp}`;
+
+            const manaPct = Math.max(0, (playerHero.mana / playerHero.maxMana) * 100);
+            document.getElementById('hud-mana-bar').style.width = `${manaPct}%`;
+
+            const xpPct = Math.min(100, (playerHero.xp / (playerHero.level * 150)) * 100);
+            document.getElementById('hud-xp-bar').style.width = `${xpPct}%`;
+
+            document.getElementById('score-blue').innerText = gameState.blueKills;
+            document.getElementById('score-red').innerText = gameState.redKills;
+
+            const mins = String(Math.floor(gameState.time / 60)).padStart(2, '0');
+            const secs = String(Math.floor(gameState.time % 60)).padStart(2, '0');
+            document.getElementById('match-timer').innerText = `${mins}:${secs}`;
+        }
+
+        let announceTimeout;
+        function showAnnouncement(msg) {
+            const box = document.getElementById('announcer-box');
+            document.getElementById('announcer-text').innerText = msg;
+            box.classList.remove('hidden');
+            clearTimeout(announceTimeout);
+            announceTimeout = setTimeout(() => box.classList.add('hidden'), 3500);
+        }
+
+        function startGame() {
+            initAudio();
+            document.getElementById('lobby-screen').classList.add('hidden');
+            document.getElementById('ui-layer').classList.remove('hidden');
+
+            buildEternalRift();
+            initMatchEntities();
+            gameState.started = true;
+            showAnnouncement("Selamat datang di Eternal Rift! Hancurkan Core lawan!");
+        }
+
+        function endMatch(isVictory) {
+            if (gameState.ended) return;
+            gameState.ended = true;
+
+            const modal = document.getElementById('gameover-modal');
+            const title = document.getElementById('gameover-title');
+            const desc = document.getElementById('gameover-desc');
+            const iconBox = document.getElementById('gameover-icon');
+
+            if (isVictory) {
+                title.innerText = "VICTORY!";
+                title.className = "font-cinzel font-black text-3xl text-amber-400 tracking-wider mb-2";
+                desc.innerText = "Aether Core Kingdom of Dusk telah dihancurkan!";
+                iconBox.innerHTML = '<i class="fa-solid fa-trophy text-4xl text-amber-400"></i>';
+                document.getElementById('end-rp').innerText = "+25 RP";
+            } else {
+                title.innerText = "DEFEAT";
+                title.className = "font-cinzel font-black text-3xl text-rose-500 tracking-wider mb-2";
+                desc.innerText = "Aether Core Kingdom of Dawn telah runtuh.";
+                iconBox.innerHTML = '<i class="fa-solid fa-skull-crossbones text-4xl text-rose-500"></i>';
+                document.getElementById('end-rp').innerText = "-15 RP";
+                document.getElementById('end-rp').className = "font-bold text-rose-400 text-sm mt-0.5";
+            }
+
+            document.getElementById('end-kda').innerText = `${playerHero.kills}/${playerHero.deaths}/${playerHero.assists}`;
+            document.getElementById('end-time').innerText = document.getElementById('match-timer').innerText;
+            modal.classList.remove('hidden');
+        }
+
+        // ==========================================
+        // 12. MAIN ANIMATION LOOP & RESIZE
+        // ==========================================
+        let lastFrameTime = performance.now();
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+
+            if (gameState.started && !gameState.ended) {
+                gameState.time += dt;
+
+                // Spawn Minion Waves every 22 seconds
+                if (gameState.time - gameState.lastWaveTime >= 22) {
+                    gameState.lastWaveTime = gameState.time;
+                    spawnMinionWave();
+                }
+
+                updateEntities(dt);
+                updateCamera();
+                renderMinimap();
+                updateHUD();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = function () {
+            animate(performance.now());
+        };
+    </script>
+</body>
+</html>
